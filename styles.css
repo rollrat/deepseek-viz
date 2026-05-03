@@ -598,7 +598,7 @@ h1 {
   height: 100%;
   padding: 9px 11px;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  align-content: start;
   gap: 6px;
   color: var(--ink);
   overflow: hidden;
@@ -631,20 +631,16 @@ h1 {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10.5px;
   line-height: 1.32;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 
 .node-formula {
   min-width: 0;
-  align-self: end;
   display: grid;
   gap: 3px;
-  overflow: hidden;
-  padding-top: 6px;
-  border-top: 1px solid rgba(102, 113, 116, 0.12);
+  overflow: visible;
+  padding: 1px 0 2px;
   color: #263437;
 }
 
@@ -660,14 +656,28 @@ h1 {
 
 .node-formula .katex {
   max-width: 100%;
-  overflow: hidden;
   font-size: 0.82em;
   line-height: 1.15;
+  white-space: normal;
 }
 
 .node-formula .katex-html {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.node-measure {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  z-index: -1;
+  visibility: hidden;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.node-measure .node-html {
+  height: auto;
+  overflow: visible;
 }
 
 .node-html em {

@@ -17,6 +17,7 @@ let layoutOffset = { x: 0, y: 0 };
 let renderVersion = 0;
 let shouldFitAfterLayout = true;
 let minimapState = null;
+let measureHost = null;
 
 function model() {
   return DATA.models[state.model];
@@ -325,13 +326,19 @@ function nodeWidth(doc) {
 }
 
 function nodeHeight(doc) {
-  const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
-  const titleLen = String(doc.title || "").length;
-  const lines = (titleLen > 24 ? 1 : 0) + (shapeLen > 42 ? 1 : 0) + (shapeLen > 74 ? 1 : 0);
-  const base = state.scene === "overview" ? 72 : 86;
-  const formulaBoost = state.showNodeFormula && doc.details?.formula ? 62 : 0;
-  const max = state.showNodeFormula ? 188 : state.scene === "overview" ? 108 : 126;
-  return Math.min(max, base + lines * 15 + formulaBoost);
+  const width = nodeWidth(doc);
+  return measureNodeHeight(doc, width);
+}
+
+function measureNodeHeight(doc, width) {
+  if (!measureHost) {
+    measureHost = document.createElement("div");
+    measureHost.className = "node-measure";
+    document.body.appendChild(measureHost);
+  }
+  measureHost.style.width = `${width}px`;
+  measureHost.innerHTML = `<div class="node-html">${nodeHtml({ doc })}</div>`;
+  return Math.ceil(measureHost.scrollHeight + 2);
 }
 
 async function renderGraph() {
@@ -645,8 +652,8 @@ function nodeHtml(item) {
       <span>${escapeHtml(item.doc.category)}</span>
       <strong>${escapeHtml(item.doc.title)}</strong>
     </div>
-    <div class="node-shape">${escapeHtml(input)} -> ${escapeHtml(output)}</div>
     ${formula}
+    <div class="node-shape">${escapeHtml(input)} -> ${escapeHtml(output)}</div>
   `;
 }
 
