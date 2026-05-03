@@ -26,12 +26,6 @@
             <button data-scene-select="moe" title="Show MoE routing and experts">MoE</button>
             <button data-scene-select="output" title="Show output head and MTP">Output</button>
           </div>
-          <div class="zoom-actions" aria-label="graph zoom controls">
-            <button id="zoomOut" title="Zoom out" aria-label="Zoom out">-</button>
-            <button id="zoomFit" title="Fit graph" aria-label="Fit graph">Fit</button>
-            <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
-          </div>
-
           <svg id="graph" viewBox="0 0 1280 1280" role="img" aria-label="DeepSeek V4 top to bottom tensor graph">
             <defs>
               <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
@@ -54,8 +48,13 @@
         </section>
 
         <aside class="info-panel" aria-label="selected node information">
-          <p id="detailCategory" class="pill">stream</p>
-          <h2 id="detailTitle">Input IDs</h2>
+          <header class="info-head">
+            <div>
+              <p id="detailCategory" class="pill">stream</p>
+              <h2 id="detailTitle">Input IDs</h2>
+            </div>
+            <button id="closeDetail" class="close-detail" title="Close details" aria-label="Close details">×</button>
+          </header>
           <div id="detailCards" class="detail-cards"></div>
           <div class="detail-shapes">
             <div>

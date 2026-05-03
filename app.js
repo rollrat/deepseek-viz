@@ -5,6 +5,7 @@ const state = {
   layer: 0,
   scene: "overview",
   selected: "input-ids",
+  detailOpen: true,
 };
 
 const elk = new ELK();
@@ -86,6 +87,7 @@ function render(fitAfterLayout = false) {
   renderModePicker();
   renderGraph();
   renderDetail();
+  renderPanelState();
 }
 
 function renderModePicker() {
@@ -496,6 +498,10 @@ function renderDetail() {
   delete drill.dataset.scene;
 }
 
+function renderPanelState() {
+  document.querySelector(".info-panel")?.classList.toggle("closed", !state.detailOpen);
+}
+
 function renderDetailCards(details) {
   if (!details) return "";
   const labels = {
@@ -602,6 +608,7 @@ document.addEventListener("click", (event) => {
   const graphNode = event.target.closest("[data-node]");
   if (graphNode) {
     state.selected = graphNode.dataset.node;
+    state.detailOpen = true;
     render();
   }
 });
@@ -614,6 +621,10 @@ document.querySelector("#layerSlider")?.addEventListener("input", (event) => {
 document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));
 document.querySelector("#zoomOut")?.addEventListener("click", () => zoomBy(0.84));
 document.querySelector("#zoomFit")?.addEventListener("click", fitGraph);
+document.querySelector("#closeDetail")?.addEventListener("click", () => {
+  state.detailOpen = false;
+  renderPanelState();
+});
 document.querySelector("#backScene")?.addEventListener("click", () => openScene("overview"));
 document.querySelector("#drillButton")?.addEventListener("click", (event) => {
   if (event.currentTarget.dataset.scene) openScene(event.currentTarget.dataset.scene);
