@@ -132,41 +132,140 @@ window.DSV4_GRAPH = (() => {
     "expert-combine": n("expert-combine", "Routed + Shared Combine", "expert", "routed y, shared y", "[B*S,D]", "routed outputs accumulate, shared expert added.", {}, [], [sources.code]),
   };
 
+  Object.assign(nodes["window-topk"], {
+    title: "SWA Window IDs",
+    summary: "Sliding-window branch over the most recent 128 tokens; active in every attention mode.",
+  });
+  Object.assign(nodes["attn-selected"], {
+    title: "Attention KV Set",
+    input: "SWA ids + active compressed ids",
+    output: "selected KV positions",
+    summary: "The final KV set merges the local SWA window with the active compressed path: CSA top-k blocks, HCA all compressed blocks, or no compressed blocks for MTP.",
+  });
+  Object.assign(nodes["sparse-attn"], {
+    title: "Hybrid Attention Kernel",
+    summary: "Runs attention over Q and the selected KV set produced by SWA, CSA, or HCA mode.",
+  });
+  Object.assign(nodes["input-ids"], {
+    title: "Input IDs (model entry)",
+    summary: "Tokenizer output enters the model once before the decoder layer stack.",
+  });
+  Object.assign(nodes["embedding"], {
+    title: "Token Embedding (once)",
+    summary: "Looks up token vectors once before the decoder layer stack begins.",
+  });
+  nodes["stack-entry"] = n(
+    "stack-entry",
+    "Decoder Stack Entry",
+    "stream",
+    "[B,S,4,D]",
+    "repeated decoder state",
+    "The expanded graph below is one representative decoder layer selected by the layer-mode control; this is not a second input stream inside every layer.",
+    { decoder_layers: "$layers" },
+    ["Input and embedding are outside the repeated decoder block."],
+    common.src,
+  );
+  nodes["stack-exit"] = n(
+    "stack-exit",
+    "Final Stack State",
+    "output",
+    "after decoder layer 60",
+    "[B,S,4,D]",
+    "Only after the decoder stack finishes does the graph branch to HC head / LM head and MTP.",
+    { lm_head: "final token only" },
+    ["The official path computes logits from x[:, -1], not from every layer."],
+    common.src,
+  );
+  Object.assign(nodes["head"], {
+    title: "Final HC Head + LM Head",
+    summary: "Runs after the full decoder stack, collapsing HC lanes and projecting only the last token to vocabulary logits.",
+  });
+  Object.assign(nodes["mtp"], {
+    title: "Final MTP Block",
+    summary: "Auxiliary next-token prediction branch after the final stack state.",
+  });
+  Object.assign(nodes["logits"], {
+    title: "Final Logits",
+    summary: "Vocabulary scores for the final-token path; sampling is outside this graph.",
+  });
+
+  Object.assign(nodes["comp-wkv"], { visibleWhen: { mode: ["csa", "hca"] } });
+  Object.assign(nodes["comp-wgate"], { visibleWhen: { mode: ["csa", "hca"] } });
+  Object.assign(nodes["tail-state"], {
+    summary: "Buffers tail tokens until a full compressed block can be formed.",
+    visibleWhen: { mode: ["csa", "hca"] },
+  });
+  Object.assign(nodes["overlap-transform"], {
+    title: "CSA Overlap Transform",
+    summary: "R=4 CSA path overlaps previous and current chunks before gated pooling.",
+    params: { active: "CSA / R=4 only" },
+    visibleWhen: { mode: "csa" },
+  });
+  Object.assign(nodes["gated-pool"], {
+    summary: "Pools R tokens into a compressed KV block using softmax weights.",
+    visibleWhen: { mode: ["csa", "hca"] },
+  });
+  Object.assign(nodes["comp-norm-rope"], { visibleWhen: { mode: ["csa", "hca"] } });
+  Object.assign(nodes["comp-cache-write"], {
+    summary: "Writes compressed KV after the live sliding-window cache region.",
+    visibleWhen: { mode: ["csa", "hca"] },
+  });
+  nodes["hca-all-compressed"] = n(
+    "hca-all-compressed",
+    "HCA All Compressed Blocks",
+    "attention",
+    "compressed cache [B,T/128,512]",
+    "[B,S,T/128]",
+    "R=128 HCA layers read all valid heavily-compressed blocks instead of running the Lightning indexer.",
+    { R: 128 },
+    ["No Lightning indexer is used in HCA mode."],
+    [sources.code],
+    null,
+    { mode: "hca" },
+  );
+
+  ["idx-q", "idx-rotate", "idx-cache", "idx-einsum", "idx-weight", "idx-topk"].forEach((id) => {
+    nodes[id].visibleWhen = { mode: "csa" };
+  });
+  Object.assign(nodes["idx-q"], { summary: "CSA-only indexer query projection from q_norm." });
+  Object.assign(nodes["idx-cache"], { summary: "CSA-only compressed index cache used by the Lightning indexer." });
+  Object.assign(nodes["idx-topk"], { summary: "Applies causal masking and selects top-k compressed block ids for CSA." });
+
   const scenes = {
     overview: scene("overview", "Full V4 internal graph", "All major controller paths, cache paths, routing paths, and expert internals are expanded in one graph.", [
-      "input-ids", "embedding", "hc-expand",
+      "input-ids", "embedding", "hc-expand", "stack-entry",
       "hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read",
       "q-wqa", "q-norm", "q-wqb", "q-reshape", "q-rope",
       "kv-wkv", "kv-norm", "kv-rope-quant", "window-topk",
       "comp-wkv", "comp-wgate", "tail-state", "overlap-transform", "gated-pool", "comp-norm-rope", "comp-cache-write",
-      "idx-q", "idx-rotate", "idx-cache", "idx-einsum", "idx-weight", "idx-topk",
+      "idx-q", "idx-rotate", "idx-cache", "idx-einsum", "idx-weight", "idx-topk", "hca-all-compressed",
       "attn-selected", "sparse-attn", "o-proj", "attn-residual-mix", "attn-post-inject", "hc-write",
       "ffn-hc-flatten", "ffn-hc-controller", "ffn-hc-sinkhorn", "hc-pre-moe", "gate-score", "hash-route", "topk-route", "route-weights", "expert-dispatch",
       "expert-w1w3", "swiglu", "expert-w2", "shared-expert", "expert-combine", "ffn-residual-mix", "ffn-post-inject", "hc-post-moe",
-      "head", "mtp", "logits",
+      "stack-exit", "head", "mtp", "logits",
     ], [
       e("input-ids", "embedding"), e("embedding", "hc-expand"),
-      e("hc-expand", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"),
+      e("hc-expand", "stack-entry"), e("stack-entry", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"),
       e("hc-read", "q-wqa"), e("q-wqa", "q-norm"), e("q-norm", "q-wqb"), e("q-wqb", "q-reshape"), e("q-reshape", "q-rope"),
       e("hc-read", "kv-wkv", "branch"), e("kv-wkv", "kv-norm"), e("kv-norm", "kv-rope-quant"), e("kv-rope-quant", "window-topk", "branch"),
-      e("kv-rope-quant", "comp-wkv", "branch"), e("kv-rope-quant", "comp-wgate", "branch"), e("comp-wkv", "tail-state"), e("comp-wgate", "tail-state"), e("tail-state", "overlap-transform"), e("overlap-transform", "gated-pool"), e("comp-wgate", "gated-pool", "branch"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"),
-      e("q-norm", "idx-q", "branch"), e("idx-q", "idx-rotate"), e("kv-rope-quant", "idx-cache", "branch"), e("idx-rotate", "idx-einsum"), e("idx-cache", "idx-einsum"), e("idx-einsum", "idx-weight"), e("idx-weight", "idx-topk"),
-      e("window-topk", "attn-selected"), e("comp-cache-write", "attn-selected", "branch"), e("idx-topk", "attn-selected", "branch"), e("q-rope", "sparse-attn"), e("attn-selected", "sparse-attn"), e("sparse-attn", "o-proj"),
+      e("kv-rope-quant", "comp-wkv", "branch"), e("kv-rope-quant", "comp-wgate", "branch"), e("comp-wkv", "tail-state"), e("comp-wgate", "tail-state"), e("tail-state", "overlap-transform", "branch", { mode: "csa" }), e("overlap-transform", "gated-pool", "branch", { mode: "csa" }), e("tail-state", "gated-pool", "branch", { mode: "hca" }), e("comp-wgate", "gated-pool", "branch"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"),
+      e("q-norm", "idx-q", "branch", { mode: "csa" }), e("idx-q", "idx-rotate"), e("kv-rope-quant", "idx-cache", "branch", { mode: "csa" }), e("idx-rotate", "idx-einsum"), e("idx-cache", "idx-einsum"), e("idx-einsum", "idx-weight"), e("idx-weight", "idx-topk"),
+      e("window-topk", "attn-selected"), e("comp-cache-write", "hca-all-compressed", "branch", { mode: "hca" }), e("hca-all-compressed", "attn-selected", "branch", { mode: "hca" }), e("idx-topk", "attn-selected", "branch", { mode: "csa" }), e("q-rope", "sparse-attn"), e("attn-selected", "sparse-attn"), e("sparse-attn", "o-proj"),
       e("hc-sinkhorn", "attn-residual-mix", "branch"), e("hc-expand", "attn-residual-mix", "branch"), e("o-proj", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch"), e("attn-residual-mix", "hc-write"), e("attn-post-inject", "hc-write"),
       e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe"), e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch"),
       e("hc-pre-moe", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights"), e("topk-route", "route-weights"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu"), e("swiglu", "expert-w2"), e("hc-pre-moe", "shared-expert", "branch"), e("expert-w2", "expert-combine"), e("shared-expert", "expert-combine"), e("expert-combine", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch"), e("ffn-residual-mix", "hc-post-moe"), e("ffn-post-inject", "hc-post-moe"),
-      e("hc-post-moe", "head"), e("hc-post-moe", "mtp", "branch"), e("head", "logits"),
+      e("hc-post-moe", "stack-exit"), e("stack-exit", "head"), e("stack-exit", "mtp", "branch"), e("head", "logits"),
     ], [
-      group("Input stream", ["input-ids", "embedding", "hc-expand"], "stream"),
+      group("Model entry (once)", ["input-ids", "embedding", "hc-expand", "stack-entry"], "stream"),
       group("mHC controller + read path", ["hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read"], "hc"),
-      group("Attention Q/KV paths", ["q-wqa", "q-norm", "q-wqb", "q-reshape", "q-rope", "kv-wkv", "kv-norm", "kv-rope-quant", "window-topk", "attn-selected", "sparse-attn", "o-proj"], "attention"),
+      group("Attention Q/KV paths", ["q-wqa", "q-norm", "q-wqb", "q-reshape", "q-rope", "kv-wkv", "kv-norm", "kv-rope-quant", "window-topk", "hca-all-compressed", "attn-selected", "sparse-attn", "o-proj"], "attention"),
       group("KV compressor + tail state", ["comp-wkv", "comp-wgate", "tail-state", "overlap-transform", "gated-pool", "comp-norm-rope", "comp-cache-write"], "cache"),
       group("Lightning indexer", ["idx-q", "idx-rotate", "idx-cache", "idx-einsum", "idx-weight", "idx-topk"], "attention"),
       group("mHC attention residual mixing", ["attn-residual-mix", "attn-post-inject", "hc-write"], "hc"),
       group("mHC MoE controller + read path", ["ffn-hc-flatten", "ffn-hc-controller", "ffn-hc-sinkhorn", "hc-pre-moe"], "hc"),
       group("MoE routing + SwiGLU experts", ["gate-score", "hash-route", "topk-route", "route-weights", "expert-dispatch", "expert-w1w3", "swiglu", "expert-w2", "shared-expert", "expert-combine"], "expert"),
       group("mHC MoE residual mixing", ["ffn-residual-mix", "ffn-post-inject", "hc-post-moe"], "hc"),
-      group("Output heads", ["head", "mtp", "logits"], "output"),
+      group("Final output only", ["stack-exit", "head", "mtp", "logits"], "output"),
     ]),
     mhc: scene("mhc", "mHC controller/data path", "pre/post/comb generation plus read/write data path.", [
       "hc-expand", "hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read", "attention", "moe", "hc-write", "hc-post-moe",
@@ -204,8 +303,8 @@ window.DSV4_GRAPH = (() => {
     return { id, title, category, input, output, summary, params, notes, sources, drill, visibleWhen };
   }
 
-  function e(from, to, type = "main") {
-    return { from, to, type };
+  function e(from, to, type = "main", visibleWhen = null) {
+    return { from, to, type, visibleWhen };
   }
 
   function scene(id, title, subtitle, nodeIds, edges, groups = []) {

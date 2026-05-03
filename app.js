@@ -26,6 +26,13 @@ function ratioValue() {
   return model().schedule[state.layer] ?? 0;
 }
 
+function attentionMode() {
+  const ratio = ratioValue();
+  if (ratio === 4) return "csa";
+  if (ratio === 128) return "hca";
+  return "swa";
+}
+
 function ratioLabel() {
   return `R=${ratioValue()}`;
 }
@@ -48,8 +55,19 @@ function resolve(value) {
 function visibleNode(id) {
   const node = DATA.nodes[id];
   if (!node) return false;
-  if (!node.visibleWhen) return true;
-  if (node.visibleWhen.ratio !== undefined) return ratioValue() === node.visibleWhen.ratio;
+  return visibleWhen(node.visibleWhen);
+}
+
+function visibleWhen(condition) {
+  if (!condition) return true;
+  if (condition.ratio !== undefined) {
+    const ratios = Array.isArray(condition.ratio) ? condition.ratio : [condition.ratio];
+    if (!ratios.includes(ratioValue())) return false;
+  }
+  if (condition.mode !== undefined) {
+    const modes = Array.isArray(condition.mode) ? condition.mode : [condition.mode];
+    if (!modes.includes(attentionMode())) return false;
+  }
   return true;
 }
 
@@ -59,14 +77,21 @@ function visibleNodeIds() {
 
 function visibleEdges() {
   const ids = new Set(visibleNodeIds());
-  return scene().edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+  return scene().edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to) && visibleWhen(edge.visibleWhen));
 }
 
 function render(fitAfterLayout = false) {
   shouldFitAfterLayout ||= fitAfterLayout;
   ensureSelection();
+  renderModePicker();
   renderGraph();
   renderDetail();
+}
+
+function renderModePicker() {
+  document.querySelectorAll("[data-layer-preset]").forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.layerPreset) === state.layer);
+  });
 }
 
 function renderStats() {
@@ -301,11 +326,6 @@ async function renderGraph() {
   const nodeLayer = d3.select("#nodeLayer");
 
   svg.attr("viewBox", `0 0 ${lastLayout.width} ${lastLayout.height}`);
-  d3.select(".canvas-bg")
-    .attr("x", 16)
-    .attr("y", 16)
-    .attr("width", lastLayout.width - 32)
-    .attr("height", lastLayout.height - 32);
 
   const edgeData = [];
   g.edges().forEach((edgeRef) => {
@@ -487,7 +507,7 @@ function fitGraph() {
       ? Math.max(0.7, Math.min(3.6, widthFillScale * 0.82))
       : Math.min(1.05, (visibleWidth / lastLayout.width) * 0.9);
   const tx = (visibleWidth - lastLayout.width * scale) / 2;
-  const ty = state.scene === "overview" ? 24 : Math.max(24, (visibleHeight - lastLayout.height * scale) / 2);
+  const ty = state.scene === "overview" ? 58 : Math.max(24, (visibleHeight - lastLayout.height * scale) / 2);
   d3.select(svgNode)
     .transition()
     .duration(220)
@@ -527,6 +547,13 @@ document.addEventListener("click", (event) => {
   const layerButton = event.target.closest("[data-layer]");
   if (layerButton) {
     state.layer = Number(layerButton.dataset.layer);
+    render(true);
+    return;
+  }
+
+  const presetButton = event.target.closest("[data-layer-preset]");
+  if (presetButton) {
+    state.layer = Number(presetButton.dataset.layerPreset);
     render(true);
     return;
   }

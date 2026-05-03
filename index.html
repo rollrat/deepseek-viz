@@ -10,9 +10,16 @@
     <div class="app">
       <main class="graph-shell" aria-label="DeepSeek V4 graph canvas">
         <section class="canvas-card">
+          <div class="mode-picker" aria-label="attention layer mode">
+            <span>Representative layer</span>
+            <button class="active" data-layer-preset="0" title="Layers 0-1 use HCA, R=128">L0-1 HCA</button>
+            <button data-layer-preset="2" title="Even decoder layers use CSA-like compressed selection, R=4">L2,4...60 CSA</button>
+            <button data-layer-preset="3" title="Odd decoder layers use HCA, R=128">L3,5...59 HCA</button>
+            <button data-layer-preset="61" title="MTP path uses sliding-window attention, R=0">MTP SWA</button>
+          </div>
           <div class="zoom-actions" aria-label="graph zoom controls">
             <button id="zoomOut" title="Zoom out" aria-label="Zoom out">-</button>
-            <button id="zoomFit" title="Fit graph" aria-label="Fit graph">◎</button>
+            <button id="zoomFit" title="Fit graph" aria-label="Fit graph">Fit</button>
             <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
           </div>
 
@@ -29,7 +36,6 @@
                 <stop offset="1" stop-color="#f7f1e4" />
               </linearGradient>
             </defs>
-            <rect class="canvas-bg" x="18" y="18" width="1244" height="1844"></rect>
             <g id="zoomLayer">
               <g id="groupLayer"></g>
               <g id="edgeLayer"></g>

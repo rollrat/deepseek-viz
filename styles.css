@@ -289,6 +289,59 @@ h1 {
   font-weight: 900;
 }
 
+.mode-picker {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: min(620px, calc(100% - 150px));
+  padding: 5px;
+  border: 1px solid rgba(207, 198, 183, 0.78);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.82);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px rgba(45, 54, 55, 0.1);
+}
+
+.mode-picker button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.mode-picker span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mode-picker button:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.mode-picker button.active {
+  border-color: rgba(21, 124, 130, 0.28);
+  background: rgba(224, 246, 244, 0.92);
+  color: var(--teal);
+  box-shadow: inset 0 0 0 1px rgba(21, 124, 130, 0.08);
+}
+
 #graph {
   display: block;
   width: 100%;
@@ -296,13 +349,6 @@ h1 {
   min-height: 760px;
   color: var(--edge);
   touch-action: none;
-}
-
-.canvas-bg {
-  fill: url(#canvasWash);
-  stroke: rgba(210, 201, 186, 0.62);
-  stroke-width: 1;
-  rx: 8;
 }
 
 .edge {
