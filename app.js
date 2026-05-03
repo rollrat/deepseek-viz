@@ -826,8 +826,14 @@ function nodeDescriptionHtml(doc) {
 function nodeFormulaHtml(doc) {
   const formula = firstFormula(doc.details?.formula);
   if (!formula?.latex) return "";
-  const title = formula.title ? `<b>${escapeHtml(resolve(formula.title))}</b>` : "";
+  const title = formula.title ? `<b>${escapeHtml(formulaTitle(formula.title))}</b>` : "";
   return `<div class="node-formula">${title}${renderLatex(compactLatex(resolve(formula.latex)), { displayMode: false })}</div>`;
+}
+
+function formulaTitle(title) {
+  const resolved = resolve(title);
+  if (!isEnglish()) return resolved;
+  return I18N.formulaTitle?.en?.[resolved] || resolved;
 }
 
 function compactLatex(source) {
@@ -1309,7 +1315,7 @@ function renderFormulaList(value) {
   return items
     .map((item) => {
       const formula = typeof item === "string" ? { latex: item } : item;
-      const title = formula.title ? `<h4>${escapeHtml(resolve(formula.title))}</h4>` : "";
+      const title = formula.title ? `<h4>${escapeHtml(formulaTitle(formula.title))}</h4>` : "";
       const note = formula.note && !isEnglish() ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
       return `<div class="formula-block">${title}<div class="formula">${renderLatex(resolve(formula.latex || ""))}</div>${note}</div>`;
     })

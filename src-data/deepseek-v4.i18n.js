@@ -41,6 +41,12 @@ window.DSV4_I18N = {
       openSubgraph: "Open subgraph",
     },
   },
+  formulaTitle: {
+    en: {
+      "입력 텐서": "Input tensor",
+      "반복 layer state": "Repeated layer state",
+    },
+  },
   groupPurpose: {
     en: {
       "Model entry (once)": "This is the one-time entry path before the repeated decoder stack. Token ids become dense hidden vectors, then the model enters the 4-lane residual state used by the mHC hyper-connection machinery. The point is to start the stack with a residual representation that can be read, mixed, and written by later attention and MoE sublayers.",

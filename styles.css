@@ -1343,7 +1343,7 @@ body.dark .node-formula {
 }
 
 body.dark .node-formula b {
-  color: #a8b8b3;
+  color: #cfddd8;
 }
 
 body.dark .node-formula .katex {
@@ -1408,6 +1408,10 @@ body.dark .detail-shapes span {
 body.dark .formula {
   border-color: rgba(150, 160, 172, 0.16);
   background: rgba(18, 19, 20, 0.56);
+}
+
+body.dark .formula-block h4 {
+  color: #d8e5df;
 }
 
 body.dark code,
