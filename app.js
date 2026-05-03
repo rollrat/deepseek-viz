@@ -1,4 +1,7 @@
 const DATA = window.DSV4_GRAPH;
+// Development guard: group narratives are hand-written prose, so assert that
+// every detailed group member still has an inline node link in its description.
+const VERIFY_GROUP_NARRATIVE_LINKS = true;
 
 const state = {
   model: "pro",
@@ -976,6 +979,44 @@ function nodeInline(id, doc = DATA.nodes[id], label = null) {
   return `<button class="node-ref" data-group-node="${escapeHtml(id)}" title="${escapeHtml(title)}">${escapeHtml(text)}</button>`;
 }
 
+function verifyGroupNarrativeLinks() {
+  if (!VERIFY_GROUP_NARRATIVE_LINKS) return;
+  const failures = [];
+  Object.entries(DATA.scenes).forEach(([sceneId, item]) => {
+    const detailedView = item.views?.detailed || item;
+    (detailedView.groups || []).forEach((group) => {
+      // The authoritative membership list is group.nodeIds; prose links must cover it exactly.
+      const docs = group.nodeIds.map((id) => DATA.nodes[id]).filter(Boolean);
+      const html = renderGroupCards(group, docs);
+      const linkedIds = new Set([...html.matchAll(/data-group-node="([^"]+)"/g)].map((match) => match[1]));
+      const missingDocs = group.nodeIds.filter((id) => !DATA.nodes[id]);
+      const missingLinks = group.nodeIds.filter((id) => DATA.nodes[id] && !linkedIds.has(id));
+      const strayLinks = [...linkedIds].filter((id) => !group.nodeIds.includes(id));
+      if (missingDocs.length || missingLinks.length || strayLinks.length) {
+        failures.push({
+          scene: sceneId,
+          group: group.label,
+          missingDocs,
+          missingLinks,
+          strayLinks,
+        });
+      }
+    });
+  });
+
+  if (!failures.length) return;
+  const report = failures
+    .map((item) => {
+      const parts = [`${item.scene} / ${item.group}`];
+      if (item.missingDocs.length) parts.push(`unknown nodes: ${item.missingDocs.join(", ")}`);
+      if (item.missingLinks.length) parts.push(`missing links: ${item.missingLinks.join(", ")}`);
+      if (item.strayLinks.length) parts.push(`stray links: ${item.strayLinks.join(", ")}`);
+      return parts.join(" | ");
+    })
+    .join("\n");
+  throw new Error(`Group narrative link verification failed:\n${report}`);
+}
+
 function collectSources(docs) {
   const seen = new Set();
   return docs.flatMap((doc) => doc.sources || []).filter((source) => {
@@ -1322,5 +1363,6 @@ document.querySelector("#drillButton")?.addEventListener("click", (event) => {
 });
 window.addEventListener("resize", applyDetailPanelPosition);
 
+verifyGroupNarrativeLinks();
 render(true);
 document.fonts?.ready.then(() => render(true));
