@@ -680,6 +680,34 @@ h1 {
   filter: drop-shadow(0 4px 9px rgba(23, 34, 37, 0.08));
 }
 
+.node.group-selected rect {
+  fill: #f6f3eb;
+  stroke-width: 1.55;
+  filter: drop-shadow(0 4px 10px rgba(23, 34, 37, 0.08));
+}
+
+.node.group-selected.stream rect {
+  stroke: rgba(22, 118, 111, 0.72);
+}
+
+.node.group-selected.attention rect,
+.node.group-selected.cache rect {
+  stroke: rgba(52, 95, 159, 0.68);
+}
+
+.node.group-selected.routing rect,
+.node.group-selected.expert rect {
+  stroke: rgba(168, 109, 23, 0.7);
+}
+
+.node.group-selected.output rect {
+  stroke: rgba(75, 118, 55, 0.68);
+}
+
+.node.group-selected.hc rect {
+  stroke: rgba(101, 86, 166, 0.72);
+}
+
 .node.selected rect {
   fill: #f7f4ec;
   stroke-width: 1.75;

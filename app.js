@@ -10,6 +10,7 @@ const state = {
   graphDetail: "detailed",
   selected: "input-ids",
   selectedGroup: null,
+  groupHighlightActive: false,
   detailOpen: true,
   detailPanelPosition: null,
   showNodeFormula: true,
@@ -168,8 +169,14 @@ function renderSceneHeader() {
 }
 
 function ensureSelection() {
-  if (state.graphDetail !== "detailed") state.selectedGroup = null;
-  if (state.selectedGroup && !currentGroup(state.selectedGroup)) state.selectedGroup = null;
+  if (state.graphDetail !== "detailed") {
+    state.selectedGroup = null;
+    state.groupHighlightActive = false;
+  }
+  if (state.selectedGroup && !currentGroup(state.selectedGroup)) {
+    state.selectedGroup = null;
+    state.groupHighlightActive = false;
+  }
   if (state.selectedGroup) return;
   if (!visibleNode(state.selected) || !visibleNodeIds().includes(state.selected)) {
     state.selected = visibleNodeIds()[0] || "input-ids";
@@ -181,8 +188,31 @@ function currentGroup(label) {
 }
 
 function isGroupActive(group) {
-  if (state.selectedGroup) return group.label === state.selectedGroup;
+  if (state.selectedGroup) return state.groupHighlightActive && group.label === state.selectedGroup;
   return group.nodeIds?.includes(state.selected);
+}
+
+function isNodeInSelectedGroup(id) {
+  return state.groupHighlightActive && Boolean(currentGroup(state.selectedGroup)?.nodeIds?.includes(id));
+}
+
+function nodeClass(item) {
+  return [
+    "node",
+    item.doc.category,
+    state.selected === item.id ? "selected" : "",
+    isNodeInSelectedGroup(item.id) ? "group-selected" : "",
+    item.doc.drill ? "drillable" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function isEdgeActive(edge) {
+  if (state.selected === edge.from || state.selected === edge.to) return true;
+  if (!state.groupHighlightActive) return false;
+  const group = currentGroup(state.selectedGroup);
+  return Boolean(group?.nodeIds?.includes(edge.from) || group?.nodeIds?.includes(edge.to));
 }
 
 async function buildLayout() {
@@ -398,7 +428,7 @@ async function renderGraph() {
       type: edgeInfo.type,
       label: edgeLabel(edgeRef.v, edgeRef.w, edgeInfo),
       points: edgeInfo.points.map((point) => ({ x: point.x - layoutOffset.x, y: point.y - layoutOffset.y })),
-      active: state.selected === edgeRef.v || state.selected === edgeRef.w,
+      active: isEdgeActive({ from: edgeRef.v, to: edgeRef.w }),
     });
   });
 
@@ -498,7 +528,7 @@ async function renderGraph() {
       (update) => update,
       (exit) => exit.remove(),
     )
-    .attr("class", (item) => `node ${item.doc.category} ${state.selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`)
+    .attr("class", nodeClass)
     .attr("data-node", (item) => item.id)
     .attr("transform", (item) => `translate(${item.x - item.width / 2},${item.y - item.height / 2})`)
     .each(function (item) {
@@ -1106,14 +1136,13 @@ function endDetailPanelDrag(event) {
 }
 
 function renderSelectionState() {
-  const selected = state.selected;
   d3.selectAll("path.edge").attr(
     "class",
-    (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${selected === item.from || selected === item.to ? "active" : ""}`,
+    (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${isEdgeActive(item) ? "active" : ""}`,
   );
   d3.selectAll("g.edge-label").attr(
     "class",
-    (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${selected === item.from || selected === item.to ? "active" : ""}`,
+    (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${isEdgeActive(item) ? "active" : ""}`,
   );
   d3.selectAll("g.graph-group").attr(
     "class",
@@ -1123,7 +1152,7 @@ function renderSelectionState() {
   d3.selectAll("#minimapGroups rect").attr("class", (item) => `minimap-group ${isGroupActive(item) ? "active" : ""}`);
   d3.selectAll("g.node").attr(
     "class",
-    (item) => `node ${item.doc.category} ${selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`,
+    nodeClass,
   );
 }
 
@@ -1133,7 +1162,7 @@ function prioritizeGraphGroups() {
 
 function groupStackRank(group) {
   const selectedNodeRank = group.nodeIds?.includes(state.selected) ? 100 : 0;
-  const selectedGroupRank = state.selectedGroup === group.label ? 200 : 0;
+  const selectedGroupRank = state.groupHighlightActive && state.selectedGroup === group.label ? 200 : 0;
   const area = Math.max(1, (group.width || 0) * (group.height || 0));
   const specificityRank = 1 / area;
   return selectedGroupRank + selectedNodeRank + specificityRank;
@@ -1193,6 +1222,7 @@ function openScene(nextScene) {
   if (!DATA.scenes[nextScene]) return;
   state.scene = nextScene;
   state.selectedGroup = null;
+  state.groupHighlightActive = false;
   state.selected = sceneView().nodeIds.find(visibleNode) || "input-ids";
   render(true);
 }
@@ -1294,7 +1324,10 @@ document.addEventListener("click", (event) => {
   const detailButton = event.target.closest("[data-detail-select]");
   if (detailButton) {
     state.graphDetail = detailButton.dataset.detailSelect;
-    if (state.graphDetail !== "detailed") state.selectedGroup = null;
+    if (state.graphDetail !== "detailed") {
+      state.selectedGroup = null;
+      state.groupHighlightActive = false;
+    }
     render(true);
     return;
   }
@@ -1302,6 +1335,7 @@ document.addEventListener("click", (event) => {
   const groupNodeButton = event.target.closest("[data-group-node]");
   if (groupNodeButton) {
     state.selected = groupNodeButton.dataset.groupNode;
+    state.groupHighlightActive = false;
     renderSelectionState();
     centerNode(state.selected);
     return;
@@ -1311,6 +1345,7 @@ document.addEventListener("click", (event) => {
   if (graphNode) {
     state.selected = graphNode.dataset.node;
     state.selectedGroup = null;
+    state.groupHighlightActive = false;
     state.detailOpen = true;
     renderDetail();
     renderPanelState();
@@ -1322,6 +1357,7 @@ document.addEventListener("click", (event) => {
   if (graphGroup && state.graphDetail === "detailed") {
     state.selected = null;
     state.selectedGroup = graphGroup.dataset.group;
+    state.groupHighlightActive = true;
     state.detailOpen = true;
     renderDetail();
     renderPanelState();
