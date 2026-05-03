@@ -247,24 +247,121 @@ window.DSV4_I18N = {
     ],
     },
     en: {
-      default: (group, docs, n, helpers) => {
-        const { escapeHtml, resolve } = helpers;
-        if (!docs.length) return [`${escapeHtml(group.label)} has no visible nodes in the current graph view.`];
-        const chunks = [];
-        for (let index = 0; index < docs.length; index += 5) {
-          const part = docs
-            .slice(index, index + 5)
-            .map((doc) => {
-              const input = escapeHtml(resolve(doc.input || ""));
-              const output = escapeHtml(resolve(doc.output || ""));
-              return `${n(doc.id)} (${input} -> ${output})`;
-            })
-            .join(", ");
-          const prefix = index === 0 ? "The linked flow starts with " : "It then continues through ";
-          chunks.push(`${prefix}${part}.`);
-        }
-        return chunks;
-      },
+      "Model entry (once)": (group, docs, n) => [
+        `${n("input-ids", "input ids")} are the discrete token inputs that enter the model once. ${n("embedding", "embedding lookup")} turns them into dense hidden vectors, ${n("hc-expand", "4-lane residual expansion")} opens the mHC residual-lane representation, and ${n("stack-entry", "decoder stack entry")} marks the boundary before repeated layers begin.`,
+      ],
+      "mHC controller + read path": (group, docs, n) => [
+        `${n("hc-flatten", "lane flatten")} exposes all four residual lanes to the controller. ${n("hc-controller", "controller linear")} predicts the lane policy, then ${n("hc-split", "pre/post/comb split")} separates read weights, write weights, and the residual mixing matrix.`,
+        `${n("hc-pre-sigmoid", "read coefficient")} and ${n("hc-post-sigmoid", "write coefficient")} bound the scalar gates used on the data path. ${n("hc-comb-softmax", "comb row seed")} initializes the 4x4 transport matrix, ${n("hc-comb-sinkhorn", "Sinkhorn comb")} makes it close to doubly stochastic, and ${n("hc-read", "read data path")} folds the lane state into the single stream consumed by attention.`,
+      ],
+      "Attention Q/KV paths": (group, docs, n) => [
+        `${n("q-wqa", "query A projection")} creates the low-rank query latent, ${n("q-norm", "query RMSNorm")} stabilizes the shared latent, and ${n("q-wqb", "query B projection")} expands it to head width. ${n("q-reshape", "head reshape")} and ${n("q-rope", "query RoPE")} then form position-aware multi-head queries.`,
+        `The KV side starts with ${n("kv-wkv", "shared KV projection")} and ${n("kv-norm", "KV RMSNorm")}, then ${n("kv-slice", "content/RoPE split")} separates content/value dimensions from positional key dimensions. ${n("kv-rope-quant", "RoPE and quantized KV")} prepares cache entries, ${n("window-topk", "SWA window ids")} keeps the local window explicit, ${n("cache-layout", "logical cache layout")} defines the shared id space, and ${n("hca-all-compressed", "all HCA compressed blocks")} covers the HCA path without indexer selection.`,
+        `${n("attn-selected", "selected KV ids")} becomes the sparse candidate set and ${n("attn-gather", "KV gather")} materializes it for the kernel. ${n("attn-score", "QK score")}, ${n("attn-mask-sink", "mask and sink")}, ${n("attn-softmax", "selected softmax")}, and ${n("attn-value-sum", "value sum")} perform the actual attention computation. ${n("attn-inv-rope", "inverse RoPE value fix")} corrects the shared-KV value path before ${n("o-woa", "output low-rank A")} and ${n("o-wob", "output projection B")} restore the residual hidden stream.`,
+      ],
+      "SWA cache write path": (group, docs, n) => [
+        `${n("swa-prefill-write", "prefill window write")} stores the most recent local prompt entries, while ${n("swa-decode-write", "decode ring write")} updates the 128-slot rolling window during decode. ${n("cache-layout", "logical cache layout")} places that SWA prefix next to compressed memory, and ${n("window-topk", "window ids")} keeps local tokens as guaranteed candidates rather than retrieval results.`,
+      ],
+      "KV compressor + tail state": (group, docs, n) => [
+        `${n("comp-wkv", "compressor KV projection")} creates candidate compressed content and ${n("comp-wgate", "pooling score projection")} creates the learned pooling scores. ${n("comp-ape", "compressor APE")} injects block-local position information before runtime state enters through ${n("tail-state", "tail state")}, ${n("comp-cutoff", "cutoff split")}, and ${n("tail-append", "tail append")} for incomplete blocks.`,
+        `Completed tokens are reshaped by ${n("comp-block-view", "block view")}, widened into the c4a span by ${n("overlap-transform", "overlap transform")}, and collapsed by ${n("gated-pool", "softmax-gated pooling")}. ${n("comp-anchor", "anchor position")}, ${n("comp-norm-rope", "compressed norm and RoPE")}, ${n("comp-cache-slot", "compressed slot map")}, and ${n("comp-cache-write", "compressed cache write")} finish the cache entry used by later attention.`,
+      ],
+      "Lightning indexer": (group, docs, n) => [
+        `${n("idx-q", "indexer query projection")} builds a retrieval query separate from the main attention query. ${n("idx-rope", "indexer RoPE")}, ${n("idx-hadamard", "Hadamard rotation")}, and ${n("idx-fp4", "FP4 activation")} make that query cheap enough for block ranking.`,
+        `The retrieval memory is separate as well: ${n("idx-cache-compress", "index cache compressor")}, ${n("idx-cache-write", "index cache write")}, and ${n("idx-cache", "index cache")} maintain compact block vectors. ${n("idx-einsum", "ReLU dot score")} scores blocks, ${n("idx-weight", "head weighting")} reduces index-head scores, ${n("idx-mask", "causal mask")} removes future blocks, ${n("idx-topk", "compressed topK")} selects candidates, and ${n("idx-offset", "cache offset")} converts block ids into attention cache ids.`,
+      ],
+      "mHC attention residual mixing": (group, docs, n) => [
+        `${n("attn-residual-mix", "residual lane mixing")} transports the previous 4-lane state through the Sinkhorn comb matrix. ${n("attn-post-inject", "attention output injection")} distributes the attention update with write coefficients, and ${n("hc-write", "attention writeback")} combines transport plus injection into the next residual-lane state.`,
+      ],
+      "mHC MoE controller + read path": (group, docs, n) => [
+        `${n("ffn-hc-flatten", "MoE lane flatten")} and ${n("ffn-hc-controller", "MoE controller")} repeat the mHC control pattern with FFN-specific parameters. ${n("ffn-hc-split", "MoE split")} separates the outputs into ${n("ffn-hc-pre-sigmoid", "MoE read coefficient")}, ${n("ffn-hc-post-sigmoid", "MoE write coefficient")}, ${n("ffn-hc-comb-softmax", "MoE comb seed")}, and ${n("ffn-hc-comb-sinkhorn", "MoE Sinkhorn comb")}. ${n("hc-pre-moe", "MoE read path")} then forms the single hidden stream used by router and experts.`,
+      ],
+      "MoE routing + SwiGLU experts": (group, docs, n) => [
+        `${n("gate-score", "router score")} produces expert affinities. Early layers can use ${n("hash-route", "hash route")}, while later layers use ${n("route-bias", "route bias")} and ${n("topk-route", "top-k route")} to choose experts; ${n("route-score-gather", "score gather")} and ${n("route-weights", "route weights")} recover the mixture weights used on outputs.`,
+        `${n("expert-counts", "expert counts")} and ${n("expert-dispatch", "expert dispatch")} turn routing decisions into expert batches. Routed experts run ${n("expert-w1w3", "expert gate/up projection")}, ${n("swiglu", "SwiGLU")}, ${n("expert-w2", "expert down projection")}, and ${n("routed-accum", "routed accumulation")} before the always-on path ${n("shared-w1w3", "shared gate/up projection")}, ${n("shared-swiglu", "shared SwiGLU")}, ${n("shared-w2", "shared down projection")}, ${n("expert-combine", "expert combine")}, and ${n("moe-allreduce", "MoE all-reduce")} merge shared and sparse results.`,
+      ],
+      "mHC MoE residual mixing": (group, docs, n) => [
+        `${n("ffn-residual-mix", "MoE residual lane mixing")} carries the existing residual lanes through the FFN-side comb matrix. ${n("ffn-post-inject", "MoE output injection")} adds the expert result to lanes, and ${n("hc-post-moe", "post-MoE writeback")} produces the residual state for the next decoder block.`,
+      ],
+      "Final output + MTP": (group, docs, n) => [
+        `${n("stack-exit", "stack exit")} is the boundary after repeated decoder layers. ${n("hc-head-collapse", "HC head collapse")}, ${n("final-rmsnorm", "final RMSNorm")}, ${n("last-token", "last-token slice")}, and ${n("lm-project", "LM projection")} create the main ${n("logits", "logits")} path only at the output boundary.`,
+        `The auxiliary branch starts with ${n("mtp-embed", "MTP embedding")} and ${n("mtp-hidden-proj", "MTP hidden projection")}, joins them in ${n("mtp-combine", "MTP combine")}, then runs ${n("mtp-block", "MTP block")} and ${n("mtp-head", "MTP head")} for Multi-Token Prediction.`,
+      ],
+      "mHC attention controller + read path": (group, docs, n) => [
+        `${n("hc-flatten", "flattened residual lanes")} feeds ${n("hc-controller", "attention mHC controller")}, whose output is split by ${n("hc-split", "split")} into read, write, and mixing tensors. ${n("hc-pre-sigmoid", "pre coefficient")} and ${n("hc-post-sigmoid", "post coefficient")} gate the data path, while ${n("hc-comb-softmax", "comb seed")} and ${n("hc-comb-sinkhorn", "Sinkhorn comb")} prepare residual-lane transport before ${n("hc-read", "read path")} forms the attention input.`,
+      ],
+      "mHC attention entry/exit": (group, docs, n) => [
+        `${n("mhc-attn", "attention mHC wrapper")} is the conceptual wrapper around the attention sublayer, and ${n("hc-write", "attention writeback")} is the exit point where attention output and residual-lane transport return to the 4-lane state.`,
+      ],
+      "Query LoRA + RoPE": (group, docs, n) => [
+        `${n("q-wqa", "low-rank query A")} compresses the hidden stream, ${n("q-norm", "query RMSNorm")} normalizes the shared query latent, ${n("q-wqb", "query B")} expands it to head channels, ${n("q-reshape", "head reshape")} restores head axes, and ${n("q-rope", "RoPE slice")} adds position phase only to the query slice that needs it.`,
+      ],
+      "Shared KV + SWA": (group, docs, n) => [
+        `${n("kv-wkv", "shared KV projection")} and ${n("kv-norm", "KV RMSNorm")} create a compact shared cache entry. ${n("kv-slice", "content/RoPE split")} and ${n("kv-rope-quant", "KV RoPE and quantization")} separate positional key scoring from value content, while ${n("cache-layout", "cache layout")} and ${n("window-topk", "SWA window")} keep recent tokens available as exact local context.`,
+      ],
+      "Compressed selection": (group, docs, n) => [
+        `${n("compressor", "KV compressor")} creates compressed memory, ${n("indexer", "Lightning indexer")} ranks it in CSA layers, and ${n("idx-offset", "compressed cache offset")} maps selected blocks into cache ids. HCA layers instead expose ${n("hca-all-compressed", "all compressed blocks")}; both paths meet at ${n("attn-selected", "selected KV ids")}.`,
+      ],
+      "Core attention kernel": (group, docs, n) => [
+        `${n("attn-gather", "selected KV gather")} materializes sparse cache entries, ${n("attn-score", "QK score")} computes logits, ${n("attn-mask-sink", "mask and sink")} applies causal/window constraints and sink terms, ${n("attn-softmax", "selected softmax")} normalizes the selected set, and ${n("attn-value-sum", "value sum")} produces the attention result.`,
+      ],
+      "KV sharing output fix": (group, docs, n) => [
+        `${n("attn-inv-rope", "inverse RoPE")} corrects the value path after shared KV has carried positional phase for key scoring. ${n("o-woa", "grouped output A")} and ${n("o-wob", "output B")} then project the attention result back to residual hidden width.`,
+      ],
+      "SWA window cache": (group, docs, n) => [
+        `${n("kv-path", "shared KV path")} produces the entries stored in ${n("kv-cache", "KV cache")}. ${n("swa-prefill-write", "prefill window write")} and ${n("swa-decode-write", "decode ring write")} maintain the exact local window, while ${n("cache-layout", "logical cache layout")} and ${n("window-topk", "window ids")} expose that window to attention.`,
+      ],
+      "Compressor projections": (group, docs, n) => [
+        `${n("comp-wkv", "compressor KV projection")} creates the content candidate, ${n("comp-wgate", "gate projection")} creates pooling scores, and ${n("comp-ape", "compressor APE")} adds local position bias before block pooling.`,
+      ],
+      "Tail / cutoff runtime state": (group, docs, n) => [
+        `${n("tail-state", "tail state")} keeps incomplete compression fragments across calls. ${n("comp-cutoff", "cutoff split")} separates full blocks from remainder tokens, and ${n("tail-append", "tail append")} carries those remainder projections into the next chunk.`,
+      ],
+      "Block pooling": (group, docs, n) => [
+        `${n("comp-block-view", "block view")} reshapes full projections into block form, ${n("overlap-transform", "overlap transform")} applies the c4a overlapping span, and ${n("gated-pool", "softmax-gated pool")} collapses each block into one compressed KV entry.`,
+      ],
+      "Compressed entry write": (group, docs, n) => [
+        `${n("comp-anchor", "anchor position")} assigns the block position, ${n("comp-norm-rope", "compressed norm/RoPE")} prepares the key representation, ${n("comp-cache-slot", "slot map")} places it after the SWA prefix, and ${n("comp-cache-write", "cache write")} stores the compressed entry.`,
+      ],
+      "Attention consumer": (group, docs, n) => [
+        `${n("attn-gather", "attention gather")} is the consumer boundary where SWA entries, compressed entries, and selected ids become the actual KV tensor read by sparse attention.`,
+      ],
+      "Indexer query path": (group, docs, n) => [
+        `${n("q-norm", "normalized query latent")} is reused by the retrieval path. ${n("idx-q", "indexer query projection")}, ${n("idx-rope", "indexer RoPE")}, ${n("idx-hadamard", "Hadamard rotation")}, and ${n("idx-fp4", "FP4 activation")} transform it into a cheap block-ranking query.`,
+      ],
+      "Indexer compressed KV cache": (group, docs, n) => [
+        `${n("kv-path", "shared KV path")} is separate from the indexer retrieval memory. ${n("idx-cache-compress", "index cache compressor")} creates compact retrieval vectors, ${n("idx-cache-write", "index cache write")} stores them, and ${n("idx-cache", "index cache")} is the memory scored by the Lightning Indexer.`,
+      ],
+      "Score + head weighting": (group, docs, n) => [
+        `${n("idx-einsum", "index score")} compares the query with compressed index cache entries, and ${n("idx-weight", "head weighting")} combines multiple index-head scores into the block ranking used by selection.`,
+      ],
+      "Masked TopK selected blocks": (group, docs, n) => [
+        `${n("idx-mask", "causal block mask")} removes future compressed blocks, ${n("idx-topk", "compressed topK")} keeps the budgeted candidates, ${n("idx-offset", "cache offset")} maps block ids into cache ids, and ${n("attn-selected", "selected ids")} merges them with local-window candidates.`,
+      ],
+      "mHC MoE entry/exit": (group, docs, n) => [
+        `${n("mhc-ffn", "MoE mHC wrapper")} marks the sparse FFN as being executed inside an mHC read/write wrapper, and ${n("hc-post-moe", "post-MoE writeback")} is the exit state returned to the decoder stack.`,
+      ],
+      "Router scores + ids": (group, docs, n) => [
+        `${n("gate-score", "router score")} creates expert affinities. ${n("hash-route", "hash route")} covers early input-id based matching, while ${n("route-bias", "selection bias")} and ${n("topk-route", "top-k route")} select later-layer experts; ${n("route-score-gather", "score gather")} and ${n("route-weights", "route weights")} recover the output mixture weights.`,
+      ],
+      "Routed expert dispatch": (group, docs, n) => [
+        `${n("expert-counts", "expert counts")} determines how many token rows go to each expert, and ${n("expert-dispatch", "expert dispatch")} packs those rows so sparse expert matmuls can run as expert-local batches.`,
+      ],
+      "Routed SwiGLU internals": (group, docs, n) => [
+        `${n("expert-w1w3", "expert gate/up projection")} builds the routed expert intermediate, ${n("swiglu", "SwiGLU")} applies the gated nonlinearity, ${n("expert-w2", "expert down projection")} restores hidden width, and ${n("routed-accum", "routed accumulation")} scatters weighted expert outputs back to token order.`,
+      ],
+      "Shared expert + combine": (group, docs, n) => [
+        `${n("shared-w1w3", "shared gate/up projection")}, ${n("shared-swiglu", "shared SwiGLU")}, and ${n("shared-w2", "shared down projection")} form the always-on FFN path. ${n("expert-combine", "expert combine")} adds shared and routed outputs, and ${n("moe-allreduce", "MoE all-reduce")} reconciles parallel shards.`,
+      ],
+      "Final stack state": (group, docs, n) => [
+        `${n("input-ids", "input ids")} remain available to output-side auxiliary paths, ${n("hc-post-moe", "post-MoE state")} is the final residual-lane state from the stack, and ${n("stack-exit", "stack exit")} marks the transition from repeated layers to output heads.`,
+      ],
+      "LM head path": (group, docs, n) => [
+        `${n("hc-head-collapse", "HC head collapse")} converts four lanes back to one hidden stream, ${n("final-rmsnorm", "final RMSNorm")} stabilizes the final representation, ${n("last-token", "last-token slice")} selects the decode position, and ${n("lm-project", "LM projection")} produces ${n("logits", "logits")}.`,
+      ],
+      "MTP branch": (group, docs, n) => [
+        `${n("mtp-embed", "MTP embedding")} brings token-id information into the auxiliary path, ${n("mtp-hidden-proj", "hidden projection")} adapts final hidden state, ${n("mtp-combine", "MTP combine")} joins them, and ${n("mtp-block", "MTP block")} plus ${n("mtp-head", "MTP head")} produce auxiliary prediction logits.`,
+      ],
     },
   },
 };
