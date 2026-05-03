@@ -1,0 +1,4 @@
+node_modules/
+screenshot*.png
+server-out.log
+server-err.log
