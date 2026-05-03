@@ -470,7 +470,7 @@ function renderDetail() {
   const doc = DATA.nodes[state.selected];
   document.querySelector("#detailCategory").textContent = doc.category;
   document.querySelector("#detailTitle").textContent = doc.title;
-  document.querySelector("#detailSummary").textContent = doc.summary;
+  document.querySelector("#detailCards").innerHTML = renderDetailCards(doc.details);
   document.querySelector("#inputShape").textContent = resolve(doc.input);
   document.querySelector("#outputShape").textContent = resolve(doc.output);
   document.querySelector("#paramList").innerHTML = Object.entries(doc.params)
@@ -484,6 +484,28 @@ function renderDetail() {
   const drill = document.querySelector("#drillButton");
   drill.hidden = true;
   delete drill.dataset.scene;
+}
+
+function renderDetailCards(details) {
+  if (!details) return "";
+  const labels = {
+    why: "설명",
+    runtime: "런타임 동작",
+    ui: "시각화 포인트",
+    open: "남은 질문",
+    formula: "계산식",
+  };
+  return Object.entries(details)
+    .filter(([, value]) => value)
+    .map(([label, value]) => {
+      const items = Array.isArray(value) ? value : [value];
+      const body =
+        items.length === 1
+          ? `<p>${escapeHtml(resolve(items[0]))}</p>`
+          : `<ul>${items.map((item) => `<li>${escapeHtml(resolve(item))}</li>`).join("")}</ul>`;
+      return `<section><h3>${escapeHtml(labels[label] || label)}</h3>${body}</section>`;
+    })
+    .join("");
 }
 
 function openScene(nextScene) {

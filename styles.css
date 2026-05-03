@@ -553,9 +553,39 @@ h1 {
   line-height: 1.2;
 }
 
-#detailSummary {
-  color: #465256;
-  line-height: 1.55;
+.detail-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.detail-cards section {
+  padding: 10px 11px;
+  border: 1px solid rgba(210, 201, 186, 0.8);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.74);
+}
+
+.detail-cards h3 {
+  margin: 0 0 6px;
+  color: var(--teal);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.detail-cards p,
+.detail-cards ul {
+  margin: 0;
+  color: #39474b;
+  font-size: 13px;
+  line-height: 1.48;
+}
+
+.detail-cards ul {
+  display: grid;
+  gap: 5px;
+  padding-left: 17px;
 }
 
 .detail-shapes {
