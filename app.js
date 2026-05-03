@@ -15,6 +15,7 @@ const state = {
   detailPanelPosition: null,
   showNodeFormula: true,
   embedNodeDescription: false,
+  theme: window.localStorage?.getItem("dsv4-theme") === "dark" ? "dark" : "light",
 };
 
 const elk = new ELK();
@@ -104,6 +105,7 @@ function visibleEdges() {
 function render(fitAfterLayout = false) {
   shouldFitAfterLayout ||= fitAfterLayout;
   ensureSelection();
+  applyTheme();
   renderModePicker();
   renderGraph();
   renderDetail();
@@ -122,6 +124,13 @@ function renderModePicker() {
   });
   const descToggle = document.querySelector("#embedDescToggle");
   if (descToggle) descToggle.checked = state.embedNodeDescription;
+  const darkToggle = document.querySelector("#darkModeToggle");
+  if (darkToggle) darkToggle.checked = state.theme === "dark";
+}
+
+function applyTheme() {
+  document.body.classList.toggle("dark", state.theme === "dark");
+  document.body.classList.toggle("light", state.theme !== "dark");
 }
 
 function renderStats() {
@@ -1390,6 +1399,13 @@ document.querySelector("#embedDescToggle")?.addEventListener("change", (event) =
   state.embedNodeDescription = event.currentTarget.checked;
   shouldFitAfterLayout = true;
   render(true);
+});
+
+document.querySelector("#darkModeToggle")?.addEventListener("change", (event) => {
+  state.theme = event.currentTarget.checked ? "dark" : "light";
+  window.localStorage?.setItem("dsv4-theme", state.theme);
+  applyTheme();
+  renderModePicker();
 });
 
 document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));

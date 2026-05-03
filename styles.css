@@ -38,6 +38,33 @@ body {
     sans-serif;
 }
 
+body.dark {
+  color-scheme: dark;
+  --bg: #121314;
+  --surface: #1a1c1f;
+  --surface-2: #22252a;
+  --node-surface: #22252a;
+  --node-surface-muted: #2c3036;
+  --ink: #eceff1;
+  --muted: #a2aab2;
+  --line: #363b42;
+  --line-strong: #535a64;
+  --teal: #58b7ad;
+  --teal-soft: #17312f;
+  --blue: #7fa4dc;
+  --blue-soft: #1b2b43;
+  --amber: #d7a95c;
+  --amber-soft: #3b2d18;
+  --violet: #aaa0df;
+  --violet-soft: #2b2742;
+  --green: #93bc75;
+  --green-soft: #24331d;
+  --edge: #89929b;
+  --shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.22);
+  background: #121314;
+}
+
 button,
 input {
   font: inherit;
@@ -1129,6 +1156,269 @@ code {
   color: white;
   cursor: pointer;
   font-weight: 900;
+}
+
+body.dark .canvas-card,
+body.dark #graph {
+  background: #121314;
+}
+
+body.dark .mode-picker,
+body.dark .minimap,
+body.dark .info-panel {
+  border-color: rgba(150, 160, 172, 0.2);
+  background: rgba(26, 28, 31, 0.9);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.32);
+}
+
+body.dark .mode-picker i {
+  background: rgba(150, 160, 172, 0.34);
+}
+
+body.dark .mode-picker button:hover,
+body.dark .formula-inline:hover,
+body.dark .close-detail:hover,
+body.dark .node-ref:hover {
+  background: rgba(64, 70, 78, 0.58);
+}
+
+body.dark .mode-picker button.active {
+  border-color: rgba(88, 183, 173, 0.38);
+  background: rgba(30, 76, 72, 0.82);
+  color: #b9f0e7;
+  box-shadow: inset 0 0 0 1px rgba(88, 183, 173, 0.16);
+}
+
+body.dark .formula-inline {
+  color: var(--muted);
+}
+
+body.dark .edge-label rect {
+  fill: rgba(30, 33, 37, 0.94);
+  stroke: rgba(150, 160, 172, 0.18);
+}
+
+body.dark .edge-label text,
+body.dark .detail-cards h3 {
+  fill: #b7c5bf;
+  color: #b7c5bf;
+}
+
+body.dark .edge-label.active rect {
+  fill: rgba(22, 70, 66, 0.95);
+  stroke: rgba(88, 183, 173, 0.38);
+}
+
+body.dark .graph-group rect {
+  fill: rgba(32, 35, 39, 0.28);
+  stroke: rgba(150, 160, 172, 0.2);
+}
+
+body.dark .graph-group text {
+  fill: #b3c1bc;
+}
+
+body.dark .graph-group.hc rect {
+  fill: rgba(90, 77, 143, 0.15);
+  stroke: rgba(170, 160, 223, 0.34);
+}
+
+body.dark .graph-group.attention rect,
+body.dark .graph-group.cache rect {
+  fill: rgba(57, 95, 154, 0.14);
+  stroke: rgba(127, 164, 220, 0.32);
+}
+
+body.dark .graph-group.expert rect,
+body.dark .graph-group.routing rect {
+  fill: rgba(142, 96, 35, 0.14);
+  stroke: rgba(215, 169, 92, 0.32);
+}
+
+body.dark .graph-group.output rect {
+  fill: rgba(78, 121, 58, 0.14);
+  stroke: rgba(147, 188, 117, 0.32);
+}
+
+body.dark .graph-group.hc.active rect {
+  fill: rgba(90, 77, 143, 0.28);
+  stroke: rgba(190, 181, 245, 0.74);
+}
+
+body.dark .graph-group.hc.active text {
+  fill: #c9c1ff;
+}
+
+body.dark .graph-group.attention.active rect,
+body.dark .graph-group.cache.active rect {
+  fill: rgba(57, 95, 154, 0.27);
+  stroke: rgba(152, 190, 246, 0.7);
+}
+
+body.dark .graph-group.attention.active text,
+body.dark .graph-group.cache.active text {
+  fill: #b8d4ff;
+}
+
+body.dark .graph-group.expert.active rect,
+body.dark .graph-group.routing.active rect {
+  fill: rgba(142, 96, 35, 0.27);
+  stroke: rgba(241, 191, 103, 0.7);
+}
+
+body.dark .graph-group.expert.active text,
+body.dark .graph-group.routing.active text {
+  fill: #f3cc86;
+}
+
+body.dark .graph-group.output.active rect {
+  fill: rgba(78, 121, 58, 0.27);
+  stroke: rgba(166, 210, 133, 0.7);
+}
+
+body.dark .graph-group.output.active text {
+  fill: #b6df93;
+}
+
+body.dark .node.stream rect {
+  fill: #1f292c;
+  stroke: rgba(88, 183, 173, 0.66);
+}
+
+body.dark .node.attention rect,
+body.dark .node.cache rect {
+  fill: #1d2634;
+  stroke: rgba(127, 164, 220, 0.62);
+}
+
+body.dark .node.routing rect,
+body.dark .node.expert rect {
+  fill: #2e281d;
+  stroke: rgba(215, 169, 92, 0.64);
+}
+
+body.dark .node.output rect {
+  fill: #202d1d;
+  stroke: rgba(147, 188, 117, 0.62);
+}
+
+body.dark .node.hc rect {
+  fill: #252235;
+  stroke: rgba(170, 160, 223, 0.66);
+}
+
+body.dark .node:hover rect {
+  filter: drop-shadow(0 5px 13px rgba(0, 0, 0, 0.34));
+}
+
+body.dark .node-html em,
+body.dark .detail-cards p,
+body.dark .detail-cards ul,
+body.dark .formula .katex {
+  color: #cdd8d3;
+}
+
+body.dark .node-html {
+  color: #edf3ef;
+}
+
+body.dark .node-title-row span {
+  color: #a7b7b2;
+}
+
+body.dark .node-title-row strong {
+  color: #f2f7f3;
+}
+
+body.dark .node-shape {
+  color: #d6e6df;
+}
+
+body.dark .node-description {
+  color: #bdcbc6;
+}
+
+body.dark .node-formula {
+  color: #dce9e4;
+}
+
+body.dark .node-formula b {
+  color: #a8b8b3;
+}
+
+body.dark .node-formula .katex {
+  color: #e3eee9;
+}
+
+body.dark .node.group-selected rect {
+  fill: #2b3034;
+}
+
+body.dark .node.selected rect {
+  fill: #30353a;
+}
+
+body.dark .node.group-selected.stream rect,
+body.dark .node.selected.stream rect {
+  stroke: rgba(105, 217, 204, 0.9);
+}
+
+body.dark .node.group-selected.attention rect,
+body.dark .node.group-selected.cache rect,
+body.dark .node.selected.attention rect,
+body.dark .node.selected.cache rect {
+  stroke: rgba(166, 204, 255, 0.86);
+}
+
+body.dark .node.group-selected.routing rect,
+body.dark .node.group-selected.expert rect,
+body.dark .node.selected.routing rect,
+body.dark .node.selected.expert rect {
+  stroke: rgba(246, 195, 101, 0.88);
+}
+
+body.dark .node.group-selected.output rect,
+body.dark .node.selected.output rect {
+  stroke: rgba(181, 226, 142, 0.86);
+}
+
+body.dark .node.group-selected.hc rect,
+body.dark .node.selected.hc rect {
+  stroke: rgba(204, 196, 255, 0.9);
+}
+
+body.dark .info-head,
+body.dark .detail-cards section,
+body.dark .detail-shapes div,
+body.dark .formula-block + .formula-block {
+  border-color: rgba(150, 160, 172, 0.14);
+}
+
+body.dark .close-detail {
+  border-color: rgba(150, 160, 172, 0.22);
+  background: rgba(35, 39, 44, 0.72);
+  color: #cdd8d3;
+}
+
+body.dark .pill,
+body.dark .detail-shapes span {
+  color: #9aa8a3;
+}
+
+body.dark .formula {
+  border-color: rgba(150, 160, 172, 0.16);
+  background: rgba(18, 19, 20, 0.56);
+}
+
+body.dark code,
+body.dark .node-ref,
+body.dark .source-list a {
+  color: #69c9be;
+}
+
+body.dark #minimapViewport {
+  fill: rgba(18, 19, 20, 0.28);
+  stroke: rgba(233, 238, 233, 0.62);
 }
 
 @media (max-width: 1060px) {
