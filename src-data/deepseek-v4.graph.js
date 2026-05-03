@@ -668,6 +668,103 @@ window.DSV4_GRAPH = (() => {
     ]),
   };
 
+  // Simple mode is intentionally a separate topology per scene. It reuses the
+  // same node docs, but owns its own nodes/edges/groups so summary edges do not
+  // depend on detailed-mode intermediate nodes being hidden correctly.
+  const simpleViews = {
+    overview: simpleView([
+      "input-ids", "embedding", "hc-expand", "stack-entry",
+      "hc-controller", "hc-read", "attention", "compressor", "indexer", "hc-write",
+      "hc-pre-moe", "gate", "routed-experts", "shared-expert", "moe", "hc-post-moe",
+      "stack-exit", "head", "mtp", "logits",
+    ], [
+      e("input-ids", "embedding"), e("embedding", "hc-expand"), e("hc-expand", "stack-entry"),
+      e("stack-entry", "hc-controller"), e("hc-controller", "hc-read"), e("hc-read", "attention"),
+      e("hc-read", "compressor", "branch", { mode: ["csa", "hca"] }), e("compressor", "attention", "branch", { mode: ["csa", "hca"] }),
+      e("hc-read", "indexer", "branch", { mode: "csa" }), e("indexer", "attention", "branch", { mode: "csa" }),
+      e("attention", "hc-write"), e("hc-write", "hc-pre-moe"), e("hc-pre-moe", "gate"),
+      e("gate", "routed-experts"), e("hc-pre-moe", "shared-expert", "branch"), e("routed-experts", "moe"), e("shared-expert", "moe", "branch"),
+      e("moe", "hc-post-moe"), e("hc-post-moe", "stack-exit"), e("stack-exit", "head"), e("head", "logits"), e("stack-exit", "mtp", "branch"),
+    ], [
+      group("Model entry", ["input-ids", "embedding", "hc-expand", "stack-entry"], "stream"),
+      group("mHC wrapper", ["hc-controller", "hc-read", "hc-write", "hc-pre-moe", "hc-post-moe"], "hc"),
+      group("Attention + memory", ["attention", "compressor", "indexer"], "attention"),
+      group("MoE summary", ["gate", "routed-experts", "shared-expert", "moe"], "expert"),
+      group("Final output", ["stack-exit", "head", "mtp", "logits"], "output"),
+    ]),
+    mhc: simpleView([
+      "hc-expand", "hc-controller", "hc-read", "attention", "attn-residual-mix", "attn-post-inject", "hc-write",
+      "ffn-hc-controller", "hc-pre-moe", "moe", "ffn-residual-mix", "ffn-post-inject", "hc-post-moe",
+    ], [
+      e("hc-expand", "hc-controller"), e("hc-controller", "hc-read"), e("hc-read", "attention"),
+      e("hc-expand", "attn-residual-mix", "branch"), e("attention", "attn-post-inject"), e("attn-residual-mix", "hc-write"), e("attn-post-inject", "hc-write"),
+      e("hc-write", "ffn-hc-controller"), e("ffn-hc-controller", "hc-pre-moe"), e("hc-pre-moe", "moe"),
+      e("hc-write", "ffn-residual-mix", "branch"), e("moe", "ffn-post-inject"), e("ffn-residual-mix", "hc-post-moe"), e("ffn-post-inject", "hc-post-moe"),
+    ], [
+      group("Attention mHC", ["hc-expand", "hc-controller", "hc-read", "attention", "attn-residual-mix", "attn-post-inject", "hc-write"], "hc"),
+      group("MoE mHC", ["ffn-hc-controller", "hc-pre-moe", "moe", "ffn-residual-mix", "ffn-post-inject", "hc-post-moe"], "hc"),
+    ]),
+    attention: simpleView([
+      "mhc-attn", "q-path", "kv-path", "cache-layout", "window-topk", "compressor", "indexer", "attn-selected", "sparse-attn", "o-proj", "hc-write",
+    ], [
+      e("mhc-attn", "q-path"), e("mhc-attn", "kv-path", "branch"), e("kv-path", "cache-layout"), e("cache-layout", "window-topk"),
+      e("kv-path", "compressor", "branch", { mode: ["csa", "hca"] }), e("q-path", "indexer", "branch", { mode: "csa" }),
+      e("window-topk", "attn-selected"), e("compressor", "attn-selected", "branch", { mode: "hca" }), e("indexer", "attn-selected", "branch", { mode: "csa" }),
+      e("q-path", "sparse-attn"), e("attn-selected", "sparse-attn"), e("sparse-attn", "o-proj"), e("o-proj", "hc-write"),
+    ], [
+      group("Query/KV paths", ["q-path", "kv-path"], "attention"),
+      group("Cache selection", ["cache-layout", "window-topk", "compressor", "indexer", "attn-selected"], "cache"),
+      group("Attention output", ["sparse-attn", "o-proj", "hc-write"], "attention"),
+    ]),
+    compression: simpleView([
+      "kv-path", "kv-cache", "swa-prefill-write", "swa-decode-write", "cache-layout", "window-topk",
+      "compressor", "tail-state", "gated-pool", "comp-norm-rope", "comp-cache-write", "attn-gather",
+    ], [
+      e("kv-path", "kv-cache"), e("kv-cache", "swa-prefill-write"), e("kv-cache", "swa-decode-write", "branch"),
+      e("swa-prefill-write", "cache-layout"), e("swa-decode-write", "cache-layout"), e("cache-layout", "window-topk"),
+      e("kv-path", "compressor", "branch", { mode: ["csa", "hca"] }), e("compressor", "tail-state"), e("tail-state", "gated-pool"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"), e("comp-cache-write", "cache-layout", "branch"), e("cache-layout", "attn-gather"),
+    ], [
+      group("SWA cache", ["kv-path", "kv-cache", "swa-prefill-write", "swa-decode-write", "cache-layout", "window-topk"], "cache"),
+      group("Compressed cache", ["compressor", "tail-state", "gated-pool", "comp-norm-rope", "comp-cache-write"], "cache"),
+      group("Consumer", ["attn-gather"], "attention"),
+    ]),
+    indexer: simpleView([
+      "q-norm", "idx-q", "idx-cache", "idx-einsum", "idx-weight", "idx-topk", "idx-offset", "attn-selected",
+    ], [
+      e("q-norm", "idx-q"), e("idx-q", "idx-einsum"), e("idx-cache", "idx-einsum"), e("idx-einsum", "idx-weight"), e("idx-weight", "idx-topk"), e("idx-topk", "idx-offset"), e("idx-offset", "attn-selected"),
+    ], [
+      group("Indexer query", ["q-norm", "idx-q"], "attention"),
+      group("Index cache", ["idx-cache"], "cache"),
+      group("Block selection", ["idx-einsum", "idx-weight", "idx-topk", "idx-offset", "attn-selected"], "attention"),
+    ]),
+    moe: simpleView([
+      "mhc-ffn", "gate-score", "hash-route", "topk-route", "route-weights", "expert-dispatch", "routed-experts", "shared-expert", "expert-combine", "hc-post-moe",
+    ], [
+      e("mhc-ffn", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"),
+      e("hash-route", "route-weights"), e("topk-route", "route-weights"), e("route-weights", "expert-dispatch"),
+      e("expert-dispatch", "routed-experts"), e("mhc-ffn", "shared-expert", "branch"), e("routed-experts", "expert-combine"), e("shared-expert", "expert-combine", "branch"), e("expert-combine", "hc-post-moe"),
+    ], [
+      group("Routing", ["gate-score", "hash-route", "topk-route", "route-weights"], "routing"),
+      group("Experts", ["expert-dispatch", "routed-experts", "shared-expert", "expert-combine"], "expert"),
+    ]),
+    output: simpleView([
+      "input-ids", "hc-post-moe", "stack-exit", "head", "mtp", "logits",
+    ], [
+      e("hc-post-moe", "stack-exit"), e("stack-exit", "head"), e("head", "logits"), e("input-ids", "mtp", "branch"), e("stack-exit", "mtp", "branch"),
+    ], [
+      group("Final state", ["hc-post-moe", "stack-exit"], "hc"),
+      group("LM head", ["head", "logits"], "output"),
+      group("MTP summary", ["input-ids", "mtp"], "output"),
+    ]),
+  };
+
+  Object.entries(scenes).forEach(([id, item]) => {
+    item.views = {
+      detailed: { nodeIds: item.nodeIds, edges: item.edges, groups: item.groups },
+      simple: simpleViews[id] || { nodeIds: item.nodeIds, edges: item.edges, groups: item.groups },
+    };
+  });
+
   function n(id, title, category, input, output, summary, params, notes, sources, drill = null, visibleWhen = null) {
     return { id, title, category, input, output, summary, params, notes, sources, drill, visibleWhen };
   }
@@ -682,6 +779,10 @@ window.DSV4_GRAPH = (() => {
 
   function group(label, nodeIds, category) {
     return { label, nodeIds, category };
+  }
+
+  function simpleView(nodeIds, edges, groups = []) {
+    return { nodeIds, edges, groups };
   }
 
   return { models, sources, nodes, scenes };

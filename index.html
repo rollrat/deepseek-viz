@@ -26,11 +26,16 @@
             <button data-scene-select="indexer" title="Show Lightning indexer">Indexer</button>
             <button data-scene-select="moe" title="Show MoE routing and experts">MoE</button>
             <button data-scene-select="output" title="Show output head and MTP">Output</button>
+            <i aria-hidden="true"></i>
+            <span>Graph</span>
+            <button class="active" data-detail-select="detailed" title="Show all expanded internal nodes">Detailed</button>
+            <button data-detail-select="simple" title="Show only representative nodes and summary edges">Simple</button>
+            <i aria-hidden="true"></i>
+            <label class="formula-inline" title="Show compact formulas inside graph nodes">
+              <input id="formulaToggle" type="checkbox" checked />
+              <span>Node formulas</span>
+            </label>
           </div>
-          <label class="formula-toggle" title="Show compact formulas inside graph nodes">
-            <input id="formulaToggle" type="checkbox" checked />
-            <span>Node formulas</span>
-          </label>
           <svg id="graph" viewBox="0 0 1280 1280" role="img" aria-label="DeepSeek V4 top to bottom tensor graph">
             <defs>
               <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">

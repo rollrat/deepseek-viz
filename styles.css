@@ -265,21 +265,24 @@ h1 {
   top: 14px;
   z-index: 4;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
-  max-width: min(1120px, calc(100% - 150px));
+  max-width: calc(100% - 28px);
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 5px;
   border: 1px solid rgba(207, 198, 183, 0.78);
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.82);
   backdrop-filter: blur(12px);
   box-shadow: 0 12px 28px rgba(45, 54, 55, 0.1);
+  scrollbar-width: thin;
 }
 
 .mode-picker button {
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 9px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -294,7 +297,7 @@ h1 {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
-  padding: 0 7px;
+  padding: 0 5px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
@@ -303,8 +306,9 @@ h1 {
 
 .mode-picker i {
   width: 1px;
+  min-width: 1px;
   height: 24px;
-  margin: 0 4px;
+  margin: 0 2px;
   background: rgba(186, 176, 161, 0.9);
 }
 
@@ -320,31 +324,39 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(21, 124, 130, 0.08);
 }
 
-.formula-toggle {
-  position: absolute;
-  left: 14px;
-  top: 61px;
-  z-index: 4;
+.formula-inline {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 31px;
-  padding: 0 10px 0 8px;
-  border: 1px solid rgba(207, 198, 183, 0.72);
-  border-radius: 8px;
-  background: rgba(255, 253, 248, 0.78);
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 8px 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
   color: #4d5a5d;
   cursor: pointer;
   font-size: 12px;
   font-weight: 850;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 10px 24px rgba(45, 54, 55, 0.08);
+  white-space: nowrap;
 }
 
-.formula-toggle input {
+.formula-inline:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.formula-inline input {
   width: 15px;
   height: 15px;
   accent-color: var(--teal);
+}
+
+.formula-inline span {
+  min-height: auto;
+  padding: 0;
+  color: inherit;
+  font-size: 12px;
+  text-transform: none;
 }
 
 #graph {
@@ -929,10 +941,6 @@ code {
 }
 
 @media (max-width: 1060px) {
-  .formula-toggle {
-    top: 103px;
-  }
-
   .minimap {
     bottom: calc(42vh + 22px);
   }
@@ -952,10 +960,6 @@ code {
 }
 
 @media (max-width: 760px) {
-  .formula-toggle {
-    top: 128px;
-  }
-
   .minimap {
     display: none;
   }

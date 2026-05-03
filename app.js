@@ -4,6 +4,7 @@ const state = {
   model: "pro",
   layer: 0,
   scene: "overview",
+  graphDetail: "detailed",
   selected: "input-ids",
   detailOpen: true,
   showNodeFormula: true,
@@ -25,6 +26,13 @@ function model() {
 
 function scene() {
   return DATA.scenes[state.scene];
+}
+
+function sceneView() {
+  const current = scene();
+  // Keep simple/detailed graph topology isolated: nodes, edges, and groups
+  // are selected as one view bundle instead of filtering detailed topology.
+  return current.views?.[state.graphDetail] || current.views?.detailed || current;
 }
 
 function ratioValue() {
@@ -77,12 +85,12 @@ function visibleWhen(condition) {
 }
 
 function visibleNodeIds() {
-  return scene().nodeIds.filter(visibleNode);
+  return sceneView().nodeIds.filter(visibleNode);
 }
 
 function visibleEdges() {
   const ids = new Set(visibleNodeIds());
-  return scene().edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to) && visibleWhen(edge.visibleWhen));
+  return sceneView().edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to) && visibleWhen(edge.visibleWhen));
 }
 
 function render(fitAfterLayout = false) {
@@ -100,6 +108,9 @@ function renderModePicker() {
   });
   document.querySelectorAll("[data-scene-select]").forEach((button) => {
     button.classList.toggle("active", button.dataset.sceneSelect === state.scene);
+  });
+  document.querySelectorAll("[data-detail-select]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.detailSelect === state.graphDetail);
   });
 }
 
@@ -270,7 +281,7 @@ async function buildElkOverviewLayout() {
       },
     ]),
   );
-  const groupData = (scene().groups || []).map((group) => groupBounds(group, nodeMap)).filter(Boolean);
+  const groupData = (sceneView().groups || []).map((group) => groupBounds(group, nodeMap)).filter(Boolean);
 
   layoutOffset = { x: 0, y: 0 };
   lastLayout = {
@@ -418,7 +429,7 @@ async function renderGraph() {
   });
 
   const nodeById = Object.fromEntries(nodeData.map((item) => [item.id, item]));
-  const groupData = g.groups || (scene().groups || []).map((group) => groupBounds(group, nodeById)).filter(Boolean);
+  const groupData = g.groups || (sceneView().groups || []).map((group) => groupBounds(group, nodeById)).filter(Boolean);
 
   const groupJoin = groupLayer
     .selectAll("g.graph-group")
@@ -789,7 +800,7 @@ function renderLatex(source, options = {}) {
 function openScene(nextScene) {
   if (!DATA.scenes[nextScene]) return;
   state.scene = nextScene;
-  state.selected = DATA.scenes[nextScene].nodeIds.find(visibleNode) || "input-ids";
+  state.selected = sceneView().nodeIds.find(visibleNode) || "input-ids";
   render(true);
 }
 
@@ -864,6 +875,13 @@ document.addEventListener("click", (event) => {
       state.layer = 2;
     }
     openScene(sceneButton.dataset.sceneSelect);
+    return;
+  }
+
+  const detailButton = event.target.closest("[data-detail-select]");
+  if (detailButton) {
+    state.graphDetail = detailButton.dataset.detailSelect;
+    render(true);
     return;
   }
 
