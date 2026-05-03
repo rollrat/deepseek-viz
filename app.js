@@ -8,7 +8,6 @@ const state = {
   selected: "input-ids",
   detailOpen: true,
   showNodeFormula: true,
-  showHoverDetail: true,
   embedNodeDescription: false,
 };
 
@@ -21,7 +20,6 @@ let renderVersion = 0;
 let shouldFitAfterLayout = true;
 let minimapState = null;
 let measureHost = null;
-let hoveredNodeId = null;
 
 function model() {
   return DATA.models[state.model];
@@ -115,8 +113,6 @@ function renderModePicker() {
   document.querySelectorAll("[data-detail-select]").forEach((button) => {
     button.classList.toggle("active", button.dataset.detailSelect === state.graphDetail);
   });
-  const hoverToggle = document.querySelector("#hoverDetailToggle");
-  if (hoverToggle) hoverToggle.checked = state.showHoverDetail;
   const descToggle = document.querySelector("#embedDescToggle");
   if (descToggle) descToggle.checked = state.embedNodeDescription;
 }
@@ -809,57 +805,6 @@ function renderFormulaList(value) {
     .join("");
 }
 
-function renderHoverDetail(doc) {
-  const description = resolve(doc.details?.why || doc.summary || "");
-  const summary = description.length > 420 ? `${description.slice(0, 419)}...` : description;
-  return `
-    <div class="hover-detail-head">
-      <span>${escapeHtml(doc.category)}</span>
-      <strong>${escapeHtml(doc.title)}</strong>
-    </div>
-    <p>${escapeHtml(summary)}</p>
-    <div class="hover-detail-shapes">
-      <div><b>Input</b><code>${escapeHtml(resolve(doc.input))}</code></div>
-      <div><b>Output</b><code>${escapeHtml(resolve(doc.output))}</code></div>
-    </div>
-  `;
-}
-
-function showHoverDetail(nodeId, event) {
-  if (!state.showHoverDetail) return;
-  const doc = DATA.nodes[nodeId];
-  const tooltip = document.querySelector("#hoverDetail");
-  if (!doc || !tooltip) return;
-  if (hoveredNodeId !== nodeId) {
-    hoveredNodeId = nodeId;
-    tooltip.innerHTML = renderHoverDetail(doc);
-  }
-  tooltip.hidden = false;
-  positionHoverDetail(event);
-}
-
-function hideHoverDetail() {
-  hoveredNodeId = null;
-  const tooltip = document.querySelector("#hoverDetail");
-  if (tooltip) tooltip.hidden = true;
-}
-
-function positionHoverDetail(event) {
-  const tooltip = document.querySelector("#hoverDetail");
-  if (!tooltip || tooltip.hidden) return;
-  const margin = 14;
-  const offset = 16;
-  const rect = tooltip.getBoundingClientRect();
-  let x = event.clientX + offset;
-  let y = event.clientY - rect.height - offset;
-  if (y < margin) y = event.clientY + offset;
-  if (x + rect.width + margin > window.innerWidth) x = event.clientX - rect.width - offset;
-  if (x + rect.width + margin > window.innerWidth) x = window.innerWidth - rect.width - margin;
-  if (y + rect.height + margin > window.innerHeight) y = window.innerHeight - rect.height - margin;
-  tooltip.style.left = `${Math.max(margin, x)}px`;
-  tooltip.style.top = `${Math.max(margin, y)}px`;
-}
-
 function renderLatex(source, options = {}) {
   if (!source) return "";
   if (window.katex?.renderToString) {
@@ -982,41 +927,10 @@ document.querySelector("#formulaToggle")?.addEventListener("change", (event) => 
   render(true);
 });
 
-document.querySelector("#hoverDetailToggle")?.addEventListener("change", (event) => {
-  state.showHoverDetail = event.currentTarget.checked;
-  if (!state.showHoverDetail) hideHoverDetail();
-  renderModePicker();
-});
-
 document.querySelector("#embedDescToggle")?.addEventListener("change", (event) => {
   state.embedNodeDescription = event.currentTarget.checked;
   shouldFitAfterLayout = true;
   render(true);
-});
-
-document.addEventListener("pointerover", (event) => {
-  const graphNode = event.target.closest?.("[data-node]");
-  if (!graphNode) return;
-  showHoverDetail(graphNode.dataset.node, event);
-});
-
-document.addEventListener("pointermove", (event) => {
-  if (!state.showHoverDetail) return;
-  const graphNode = event.target.closest?.("[data-node]");
-  if (graphNode) {
-    showHoverDetail(graphNode.dataset.node, event);
-    return;
-  }
-  if (!hoveredNodeId) return;
-  positionHoverDetail(event);
-});
-
-document.addEventListener("pointerout", (event) => {
-  const graphNode = event.target.closest?.("[data-node]");
-  if (!graphNode) return;
-  const nextNode = event.relatedTarget?.closest?.("[data-node]");
-  if (nextNode === graphNode) return;
-  hideHoverDetail();
 });
 
 document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));
