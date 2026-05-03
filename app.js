@@ -73,8 +73,15 @@ function nodeTitle(doc) {
   return doc?.title || "";
 }
 
+function nodeText(doc, lang = state.lang) {
+  return doc?.id ? I18N.nodeText?.[lang]?.[doc.id] || null : null;
+}
+
 function nodeSummary(doc) {
   if (!doc) return "";
+  const text = nodeText(doc);
+  const localized = text?.details?.why || text?.summary;
+  if (localized) return resolve(localized);
   if (!isEnglish()) return resolve(doc.details?.why || doc.summary || "");
   return englishNodeDescription(doc);
 }
@@ -87,12 +94,13 @@ function englishNodeDescription(doc) {
 }
 
 function nodeDetails(doc) {
-  if (!isEnglish()) return doc.details;
-  return {
-    why: englishNodeDescription(doc),
-    runtime: englishNodeRuntime(doc),
-    formula: doc.details?.formula,
-  };
+  const text = nodeText(doc);
+  const details = { ...(text?.details || {}) };
+  if (isEnglish() && !details.why) details.why = englishNodeDescription(doc);
+  if (isEnglish() && !details.runtime) details.runtime = englishNodeRuntime(doc);
+  const formula = localizedFormula(doc);
+  if (formula.length) details.formula = formula;
+  return details;
 }
 
 function englishNodeRuntime(doc) {
@@ -824,9 +832,9 @@ function nodeDescriptionHtml(doc) {
 }
 
 function nodeFormulaHtml(doc) {
-  const formula = firstFormula(doc.details?.formula);
+  const formula = firstFormula(localizedFormula(doc));
   if (!formula?.latex) return "";
-  const title = formula.title ? `<b>${escapeHtml(formulaTitle(formula.title))}</b>` : "";
+  const title = formula.title ? `<b>${escapeHtml(resolve(formula.title))}</b>` : "";
   return `<div class="node-formula">${title}${renderLatex(compactLatex(resolve(formula.latex)), { displayMode: false })}</div>`;
 }
 
@@ -834,6 +842,29 @@ function formulaTitle(title) {
   const resolved = resolve(title);
   if (!isEnglish()) return resolved;
   return I18N.formulaTitle?.en?.[resolved] || resolved;
+}
+
+function localizedFormula(doc) {
+  const formulas = doc?.details?.formula;
+  const items = formulas ? (Array.isArray(formulas) ? formulas : [formulas]) : [];
+  if (!items.length) return [];
+  const ownMeta = nodeText(doc)?.formula || [];
+  const fallbackMeta =
+    isEnglish() && !ownMeta.length
+      ? (nodeText(doc, "ko")?.formula || []).map((item) => ({
+          title: item.title ? formulaTitle(item.title) : undefined,
+        }))
+      : [];
+  const meta = ownMeta.length ? ownMeta : fallbackMeta;
+  return items.map((item, index) => {
+    const formula = typeof item === "string" ? { latex: item } : item;
+    const extra = meta[index] || {};
+    return {
+      ...formula,
+      title: extra.title ?? formula.title,
+      note: extra.note ?? formula.note,
+    };
+  });
 }
 
 function compactLatex(source) {
@@ -1135,8 +1166,8 @@ function renderFormulaList(value) {
   return items
     .map((item) => {
       const formula = typeof item === "string" ? { latex: item } : item;
-      const title = formula.title ? `<h4>${escapeHtml(formulaTitle(formula.title))}</h4>` : "";
-      const note = formula.note && !isEnglish() ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
+      const title = formula.title ? `<h4>${escapeHtml(resolve(formula.title))}</h4>` : "";
+      const note = formula.note ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
       return `<div class="formula-block">${title}<div class="formula">${renderLatex(resolve(formula.latex || ""))}</div>${note}</div>`;
     })
     .join("");
