@@ -14,6 +14,7 @@ let lastLayout = { width: 1280, height: 1280 };
 let layoutOffset = { x: 0, y: 0 };
 let renderVersion = 0;
 let shouldFitAfterLayout = true;
+let minimapState = null;
 
 function model() {
   return DATA.models[state.model];
@@ -427,14 +428,116 @@ async function renderGraph() {
     zoomBehavior = d3
       .zoom()
       .scaleExtent([0.18, 5])
-      .on("zoom", (event) => zoomLayer.attr("transform", event.transform));
+      .on("zoom", (event) => {
+        zoomLayer.attr("transform", event.transform);
+        updateMinimapViewport();
+      });
     svg.call(zoomBehavior);
   }
+
+  renderMinimap(nodeData, edgeData, groupData);
 
   if (shouldFitAfterLayout) {
     shouldFitAfterLayout = false;
     requestAnimationFrame(fitGraph);
   }
+}
+
+function renderMinimap(nodes, edges, groups) {
+  const mini = d3.select("#minimapSvg");
+  if (mini.empty()) return;
+
+  const width = 180;
+  const height = 128;
+  const pad = 10;
+  const scale = Math.min((width - pad * 2) / lastLayout.width, (height - pad * 2) / lastLayout.height);
+  const offsetX = (width - lastLayout.width * scale) / 2;
+  const offsetY = (height - lastLayout.height * scale) / 2;
+  minimapState = { width, height, scale, offsetX, offsetY };
+
+  const x = (value) => offsetX + value * scale;
+  const y = (value) => offsetY + value * scale;
+
+  d3.select("#minimapGroups")
+    .selectAll("rect")
+    .data(groups, (item) => item.label)
+    .join("rect")
+    .attr("class", "minimap-group")
+    .attr("x", (item) => x(item.x))
+    .attr("y", (item) => y(item.y))
+    .attr("width", (item) => Math.max(1, item.width * scale))
+    .attr("height", (item) => Math.max(1, item.height * scale));
+
+  d3.select("#minimapEdges")
+    .selectAll("path")
+    .data(edges, (item) => item.id)
+    .join("path")
+    .attr("class", "minimap-edge")
+    .attr("d", (item) =>
+      lineForPoints(item.points.map((point) => ({ x: x(point.x), y: y(point.y) }))),
+    );
+
+  d3.select("#minimapNodes")
+    .selectAll("rect")
+    .data(nodes, (item) => item.id)
+    .join("rect")
+    .attr("class", (item) => `minimap-node ${item.doc.category}`)
+    .attr("x", (item) => x(item.x - item.width / 2))
+    .attr("y", (item) => y(item.y - item.height / 2))
+    .attr("width", (item) => Math.max(2.4, item.width * scale))
+    .attr("height", (item) => Math.max(2.4, item.height * scale))
+    .attr("rx", 1.3);
+
+  mini.on("pointerdown", (event) => {
+    event.preventDefault();
+    panToMinimapEvent(event);
+    mini.node().setPointerCapture?.(event.pointerId);
+    mini.on("pointermove.minimap", panToMinimapEvent);
+  });
+  mini.on("pointerup pointerleave pointercancel", (event) => {
+    mini.on("pointermove.minimap", null);
+    mini.node().releasePointerCapture?.(event.pointerId);
+  });
+
+  updateMinimapViewport();
+}
+
+function panToMinimapEvent(event) {
+  if (!minimapState || !zoomBehavior) return;
+  const [mx, my] = d3.pointer(event, d3.select("#minimapSvg").node());
+  const graphX = (mx - minimapState.offsetX) / minimapState.scale;
+  const graphY = (my - minimapState.offsetY) / minimapState.scale;
+  const svgNode = document.querySelector("#graph");
+  const rect = svgNode.getBoundingClientRect();
+  const transform = d3.zoomTransform(svgNode);
+  const viewScaleX = lastLayout.width / rect.width;
+  const viewScaleY = lastLayout.height / rect.height;
+  const centerX = (rect.width * viewScaleX) / 2;
+  const centerY = (rect.height * viewScaleY) / 2;
+  d3.select(svgNode).call(
+    zoomBehavior.transform,
+    d3.zoomIdentity.translate(centerX - graphX * transform.k, centerY - graphY * transform.k).scale(transform.k),
+  );
+}
+
+function updateMinimapViewport() {
+  if (!minimapState) return;
+  const svgNode = document.querySelector("#graph");
+  if (!svgNode) return;
+  const rect = svgNode.getBoundingClientRect();
+  const transform = d3.zoomTransform(svgNode);
+  const viewScaleX = lastLayout.width / rect.width;
+  const viewScaleY = lastLayout.height / rect.height;
+  const viewW = (rect.width * viewScaleX) / transform.k;
+  const viewH = (rect.height * viewScaleY) / transform.k;
+  const viewX = -transform.x / transform.k;
+  const viewY = -transform.y / transform.k;
+
+  d3.select("#minimapViewport")
+    .attr("x", minimapState.offsetX + viewX * minimapState.scale)
+    .attr("y", minimapState.offsetY + viewY * minimapState.scale)
+    .attr("width", viewW * minimapState.scale)
+    .attr("height", viewH * minimapState.scale);
 }
 
 function lineForPoints(points) {

@@ -329,6 +329,81 @@ h1 {
   touch-action: none;
 }
 
+.minimap {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 4;
+  width: 180px;
+  height: 128px;
+  border: 1px solid rgba(102, 113, 116, 0.18);
+  border-radius: 7px;
+  background: rgba(250, 249, 245, 0.78);
+  box-shadow: 0 10px 28px rgba(34, 42, 44, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+#minimapSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.minimap-edge {
+  fill: none;
+  stroke: rgba(121, 132, 135, 0.24);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.minimap-group {
+  fill: rgba(102, 113, 116, 0.04);
+  stroke: rgba(102, 113, 116, 0.13);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.minimap-node {
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.minimap-node.stream {
+  fill: rgba(22, 118, 111, 0.35);
+  stroke: rgba(22, 118, 111, 0.54);
+}
+
+.minimap-node.attention,
+.minimap-node.cache {
+  fill: rgba(52, 95, 159, 0.32);
+  stroke: rgba(52, 95, 159, 0.5);
+}
+
+.minimap-node.routing,
+.minimap-node.expert {
+  fill: rgba(168, 109, 23, 0.32);
+  stroke: rgba(168, 109, 23, 0.5);
+}
+
+.minimap-node.hc {
+  fill: rgba(101, 86, 166, 0.32);
+  stroke: rgba(101, 86, 166, 0.5);
+}
+
+.minimap-node.output {
+  fill: rgba(75, 118, 55, 0.32);
+  stroke: rgba(75, 118, 55, 0.5);
+}
+
+#minimapViewport {
+  fill: rgba(255, 253, 248, 0.18);
+  stroke: rgba(23, 34, 37, 0.72);
+  stroke-width: 1.1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .edge {
   fill: none;
   stroke: currentColor;
@@ -710,6 +785,10 @@ code {
 }
 
 @media (max-width: 1060px) {
+  .minimap {
+    bottom: calc(42vh + 22px);
+  }
+
   .info-panel {
     top: auto;
     right: 10px;
@@ -725,6 +804,10 @@ code {
 }
 
 @media (max-width: 760px) {
+  .minimap {
+    display: none;
+  }
+
   .topbar {
     align-items: flex-start;
     flex-direction: column;
