@@ -6,6 +6,7 @@ const state = {
   scene: "overview",
   selected: "input-ids",
   detailOpen: true,
+  showNodeFormula: false,
 };
 
 const elk = new ELK();
@@ -316,9 +317,10 @@ function nodeWidth(doc) {
   const titleLen = String(doc.title || "").length;
   const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
   const detailBoost = doc.details ? 12 : 0;
-  const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost;
-  const min = state.scene === "overview" ? 198 : 228;
-  const max = state.scene === "overview" ? 286 : state.scene === "moe" ? 342 : 326;
+  const formulaBoost = state.showNodeFormula ? 54 : 0;
+  const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost + formulaBoost;
+  const min = state.showNodeFormula ? 286 : state.scene === "overview" ? 198 : 228;
+  const max = state.showNodeFormula ? 420 : state.scene === "overview" ? 286 : state.scene === "moe" ? 342 : 326;
   return Math.round(Math.max(min, Math.min(max, raw)));
 }
 
@@ -327,8 +329,9 @@ function nodeHeight(doc) {
   const titleLen = String(doc.title || "").length;
   const lines = (titleLen > 24 ? 1 : 0) + (shapeLen > 42 ? 1 : 0) + (shapeLen > 74 ? 1 : 0);
   const base = state.scene === "overview" ? 72 : 86;
-  const max = state.scene === "overview" ? 108 : 126;
-  return Math.min(max, base + lines * 15);
+  const formulaBoost = state.showNodeFormula && doc.details?.formula ? 62 : 0;
+  const max = state.showNodeFormula ? 188 : state.scene === "overview" ? 108 : 126;
+  return Math.min(max, base + lines * 15 + formulaBoost);
 }
 
 async function renderGraph() {
@@ -636,13 +639,28 @@ function pathMidpoint(points) {
 function nodeHtml(item) {
   const input = truncate(resolve(item.doc.input), state.scene === "overview" ? 34 : 46);
   const output = truncate(resolve(item.doc.output), state.scene === "overview" ? 34 : 46);
+  const formula = state.showNodeFormula ? nodeFormulaHtml(item.doc) : "";
   return `
     <div class="node-title-row">
       <span>${escapeHtml(item.doc.category)}</span>
       <strong>${escapeHtml(item.doc.title)}</strong>
     </div>
     <div class="node-shape">${escapeHtml(input)} -> ${escapeHtml(output)}</div>
+    ${formula}
   `;
+}
+
+function nodeFormulaHtml(doc) {
+  const formula = firstFormula(doc.details?.formula);
+  if (!formula?.latex) return "";
+  const title = formula.title ? `<b>${escapeHtml(resolve(formula.title))}</b>` : "";
+  return `<div class="node-formula">${title}${renderLatex(resolve(formula.latex), { displayMode: false })}</div>`;
+}
+
+function firstFormula(value) {
+  if (!value) return null;
+  const item = Array.isArray(value) ? value[0] : value;
+  return typeof item === "string" ? { latex: item } : item;
 }
 
 function groupBounds(group, nodeById) {
@@ -726,11 +744,11 @@ function renderFormulaList(value) {
     .join("");
 }
 
-function renderLatex(source) {
+function renderLatex(source, options = {}) {
   if (!source) return "";
   if (window.katex?.renderToString) {
     return window.katex.renderToString(source, {
-      displayMode: true,
+      displayMode: options.displayMode ?? true,
       throwOnError: false,
       strict: false,
       trust: false,
@@ -830,6 +848,12 @@ document.addEventListener("click", (event) => {
 
 document.querySelector("#layerSlider")?.addEventListener("input", (event) => {
   state.layer = Number(event.target.value);
+  render(true);
+});
+
+document.querySelector("#formulaToggle")?.addEventListener("change", (event) => {
+  state.showNodeFormula = event.currentTarget.checked;
+  shouldFitAfterLayout = true;
   render(true);
 });
 

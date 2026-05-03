@@ -320,6 +320,33 @@ h1 {
   box-shadow: inset 0 0 0 1px rgba(21, 124, 130, 0.08);
 }
 
+.formula-toggle {
+  position: absolute;
+  left: 14px;
+  top: 61px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 0 10px 0 8px;
+  border: 1px solid rgba(207, 198, 183, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.78);
+  color: #4d5a5d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(45, 54, 55, 0.08);
+}
+
+.formula-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--teal);
+}
+
 #graph {
   display: block;
   width: 100%;
@@ -571,7 +598,7 @@ h1 {
   height: 100%;
   padding: 9px 11px;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 6px;
   color: var(--ink);
   overflow: hidden;
@@ -600,7 +627,6 @@ h1 {
 
 .node-shape {
   min-height: 0;
-  align-self: end;
   color: #2f3d40;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 10.5px;
@@ -609,6 +635,39 @@ h1 {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+}
+
+.node-formula {
+  min-width: 0;
+  align-self: end;
+  display: grid;
+  gap: 3px;
+  overflow: hidden;
+  padding-top: 6px;
+  border-top: 1px solid rgba(102, 113, 116, 0.12);
+  color: #263437;
+}
+
+.node-formula b {
+  overflow: hidden;
+  color: #516063;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-formula .katex {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.82em;
+  line-height: 1.15;
+}
+
+.node-formula .katex-html {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .node-html em {
@@ -860,6 +919,10 @@ code {
 }
 
 @media (max-width: 1060px) {
+  .formula-toggle {
+    top: 103px;
+  }
+
   .minimap {
     bottom: calc(42vh + 22px);
   }
@@ -879,6 +942,10 @@ code {
 }
 
 @media (max-width: 760px) {
+  .formula-toggle {
+    top: 128px;
+  }
+
   .minimap {
     display: none;
   }
