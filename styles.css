@@ -3,6 +3,8 @@
   --bg: #efebe1;
   --surface: #fffdf8;
   --surface-2: #f8f3e8;
+  --node-surface: #f4f1e9;
+  --node-surface-muted: #ebe6dc;
   --ink: #172225;
   --muted: #667174;
   --line: #d2c9ba;
@@ -18,8 +20,8 @@
   --green: #4b7637;
   --green-soft: #dfebd2;
   --edge: #798487;
-  --shadow: 0 22px 70px rgba(34, 42, 44, 0.14);
-  --shadow-soft: 0 10px 28px rgba(34, 42, 44, 0.1);
+  --shadow: 0 18px 48px rgba(34, 42, 44, 0.1);
+  --shadow-soft: 0 4px 14px rgba(34, 42, 44, 0.06);
 }
 
 * {
@@ -362,65 +364,65 @@ h1 {
 .edge {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.2;
+  stroke-width: 1.45;
   marker-end: url(#arrow);
-  opacity: 0.68;
+  opacity: 0.56;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
 .edge.branch {
-  opacity: 0.34;
-  stroke-dasharray: 6 8;
+  opacity: 0.28;
+  stroke-dasharray: 4 9;
 }
 
 .edge.active {
   stroke: var(--teal);
-  stroke-width: 3;
-  opacity: 0.92;
+  stroke-width: 1.9;
+  opacity: 0.82;
 }
 
 .edge.main {
-  stroke-dasharray: 9 13;
-  animation: flow 1.8s linear infinite;
+  stroke-dasharray: none;
+  animation: none;
 }
 
 .graph-group rect {
-  fill: rgba(255, 253, 248, 0.42);
-  stroke: rgba(121, 132, 135, 0.26);
-  stroke-width: 1.4;
-  rx: 10;
+  fill: rgba(249, 247, 241, 0.28);
+  stroke: rgba(116, 121, 119, 0.22);
+  stroke-width: 0.9;
+  rx: 6;
   vector-effect: non-scaling-stroke;
 }
 
 .graph-group text {
   fill: var(--muted);
-  font-size: 13px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 760;
   text-transform: uppercase;
   pointer-events: none;
 }
 
 .graph-group.hc rect {
-  stroke: rgba(101, 86, 166, 0.35);
-  fill: rgba(229, 222, 244, 0.2);
+  stroke: rgba(101, 86, 166, 0.28);
+  fill: rgba(229, 222, 244, 0.11);
 }
 
 .graph-group.attention rect,
 .graph-group.cache rect {
-  stroke: rgba(52, 95, 159, 0.32);
-  fill: rgba(223, 232, 247, 0.18);
+  stroke: rgba(52, 95, 159, 0.24);
+  fill: rgba(223, 232, 247, 0.1);
 }
 
 .graph-group.expert rect,
 .graph-group.routing rect {
-  stroke: rgba(168, 109, 23, 0.34);
-  fill: rgba(242, 223, 189, 0.18);
+  stroke: rgba(168, 109, 23, 0.24);
+  fill: rgba(242, 223, 189, 0.1);
 }
 
 .graph-group.output rect {
-  stroke: rgba(75, 118, 55, 0.34);
-  fill: rgba(223, 235, 210, 0.18);
+  stroke: rgba(75, 118, 55, 0.23);
+  fill: rgba(223, 235, 210, 0.1);
 }
 
 @keyframes flow {
@@ -434,19 +436,21 @@ h1 {
 }
 
 .node rect {
-  stroke-width: 1.7;
-  filter: url(#softShadow);
-  rx: 7;
+  stroke-width: 1.15;
+  filter: none;
+  rx: 5;
   vector-effect: non-scaling-stroke;
 }
 
 .node.selected rect {
   stroke: var(--ink);
-  stroke-width: 3.2;
+  stroke-width: 1.7;
+  filter: drop-shadow(0 4px 10px rgba(23, 34, 37, 0.08));
 }
 
 .node:hover rect {
-  stroke-width: 3;
+  stroke-width: 1.35;
+  filter: drop-shadow(0 3px 8px rgba(23, 34, 37, 0.06));
 }
 
 .node.drillable rect {
@@ -454,30 +458,30 @@ h1 {
 }
 
 .node.stream rect {
-  fill: var(--teal-soft);
-  stroke: var(--teal);
+  fill: var(--node-surface);
+  stroke: rgba(22, 118, 111, 0.58);
 }
 
 .node.attention rect,
 .node.cache rect {
-  fill: var(--blue-soft);
-  stroke: var(--blue);
+  fill: var(--node-surface);
+  stroke: rgba(52, 95, 159, 0.52);
 }
 
 .node.routing rect,
 .node.expert rect {
-  fill: var(--amber-soft);
-  stroke: var(--amber);
+  fill: var(--node-surface);
+  stroke: rgba(168, 109, 23, 0.54);
 }
 
 .node.output rect {
-  fill: var(--green-soft);
-  stroke: var(--green);
+  fill: var(--node-surface);
+  stroke: rgba(75, 118, 55, 0.52);
 }
 
 .node.hc rect {
-  fill: var(--violet-soft);
-  stroke: var(--violet);
+  fill: var(--node-surface);
+  stroke: rgba(101, 86, 166, 0.56);
 }
 
 .node foreignObject {
@@ -486,10 +490,10 @@ h1 {
 
 .node-html {
   height: 100%;
-  padding: 10px 12px;
+  padding: 9px 11px;
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 7px;
+  gap: 6px;
   color: var(--ink);
   overflow: hidden;
 }
@@ -500,38 +504,41 @@ h1 {
 }
 
 .node-title-row span {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 900;
+  color: #596366;
+  font-size: 9px;
+  line-height: 1.1;
+  font-weight: 760;
   text-transform: uppercase;
 }
 
 .node-title-row strong {
   display: block;
-  font-size: 14px;
-  line-height: 1.15;
-  font-weight: 900;
+  font-size: 13px;
+  line-height: 1.18;
+  font-weight: 760;
   white-space: normal;
 }
 
 .node-shape {
   min-height: 0;
   align-self: end;
-  color: #455256;
+  color: #2f3d40;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: 10.5px;
+  line-height: 1.32;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .node-html em {
   display: block;
-  margin-top: 4px;
-  color: var(--teal);
-  font-size: 10px;
+  margin-top: 3px;
+  color: #596466;
+  font-size: 9.5px;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 760;
 }
 
 .info-panel {

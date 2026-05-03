@@ -307,15 +307,22 @@ function findCycles(ids, edges) {
 }
 
 function nodeWidth(doc) {
-  if (state.scene === "moe") return doc.category === "expert" ? 300 : 270;
-  if (state.scene !== "overview") return 280;
-  if (doc.category === "expert" || doc.category === "cache") return 230;
-  return 220;
+  const titleLen = String(doc.title || "").length;
+  const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
+  const detailBoost = doc.details ? 12 : 0;
+  const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost;
+  const min = state.scene === "overview" ? 198 : 228;
+  const max = state.scene === "overview" ? 286 : state.scene === "moe" ? 342 : 326;
+  return Math.round(Math.max(min, Math.min(max, raw)));
 }
 
 function nodeHeight(doc) {
-  if (state.scene !== "overview") return 98;
-  return doc.category === "attention" || doc.category === "routing" ? 76 : 72;
+  const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
+  const titleLen = String(doc.title || "").length;
+  const lines = (titleLen > 24 ? 1 : 0) + (shapeLen > 42 ? 1 : 0) + (shapeLen > 74 ? 1 : 0);
+  const base = state.scene === "overview" ? 72 : 86;
+  const max = state.scene === "overview" ? 108 : 126;
+  return Math.min(max, base + lines * 15);
 }
 
 async function renderGraph() {
