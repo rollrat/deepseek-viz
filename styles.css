@@ -808,6 +808,10 @@ h1 {
   padding-left: 17px;
 }
 
+.detail-cards p + p {
+  margin-top: 7px;
+}
+
 .formula-card {
   overflow: hidden;
 }
@@ -907,6 +911,11 @@ code {
   display: grid;
   gap: 9px;
   line-height: 1.45;
+}
+
+.note-list:empty,
+.note-list[hidden] {
+  display: none;
 }
 
 .source-list {

@@ -718,7 +718,8 @@ function renderDetail() {
   document.querySelector("#paramList").innerHTML = Object.entries(doc.params)
     .map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(resolve(value))}</dd></div>`)
     .join("");
-  document.querySelector("#noteList").innerHTML = doc.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  document.querySelector("#noteList").innerHTML = "";
+  document.querySelector("#noteList").hidden = true;
   document.querySelector("#sourceList").innerHTML = doc.sources
     .map((source) => `<a href="${source.url}" target="_blank" rel="noreferrer">${source.label}</a>`)
     .join("");
