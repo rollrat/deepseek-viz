@@ -644,17 +644,6 @@ h1 {
   vector-effect: non-scaling-stroke;
 }
 
-.node.selected rect {
-  stroke: var(--ink);
-  stroke-width: 1.7;
-  filter: drop-shadow(0 4px 10px rgba(23, 34, 37, 0.08));
-}
-
-.node:hover rect {
-  stroke-width: 1.35;
-  filter: drop-shadow(0 3px 8px rgba(23, 34, 37, 0.06));
-}
-
 .node.drillable rect {
   stroke-dasharray: 0;
 }
@@ -684,6 +673,39 @@ h1 {
 .node.hc rect {
   fill: var(--node-surface);
   stroke: rgba(101, 86, 166, 0.56);
+}
+
+.node:hover rect {
+  stroke-width: 1.45;
+  filter: drop-shadow(0 4px 9px rgba(23, 34, 37, 0.08));
+}
+
+.node.selected rect {
+  fill: #f7f4ec;
+  stroke-width: 1.75;
+  filter: drop-shadow(0 5px 12px rgba(23, 34, 37, 0.1));
+}
+
+.node.selected.stream rect {
+  stroke: rgba(22, 118, 111, 0.82);
+}
+
+.node.selected.attention rect,
+.node.selected.cache rect {
+  stroke: rgba(52, 95, 159, 0.78);
+}
+
+.node.selected.routing rect,
+.node.selected.expert rect {
+  stroke: rgba(168, 109, 23, 0.8);
+}
+
+.node.selected.output rect {
+  stroke: rgba(75, 118, 55, 0.78);
+}
+
+.node.selected.hc rect {
+  stroke: rgba(101, 86, 166, 0.82);
 }
 
 .node foreignObject {

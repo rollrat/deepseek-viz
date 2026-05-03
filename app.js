@@ -1246,10 +1246,6 @@ document.addEventListener("click", (event) => {
   const groupNodeButton = event.target.closest("[data-group-node]");
   if (groupNodeButton) {
     state.selected = groupNodeButton.dataset.groupNode;
-    state.selectedGroup = null;
-    state.detailOpen = true;
-    renderDetail();
-    renderPanelState();
     renderSelectionState();
     centerNode(state.selected);
     return;
