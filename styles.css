@@ -727,6 +727,45 @@ h1 {
   padding-left: 17px;
 }
 
+.formula-card {
+  overflow: hidden;
+}
+
+.formula-block {
+  display: grid;
+  gap: 6px;
+  padding: 9px 0;
+}
+
+.formula-block + .formula-block {
+  border-top: 1px solid rgba(102, 113, 116, 0.1);
+}
+
+.formula-block h4 {
+  margin: 0;
+  color: #243135;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.formula {
+  overflow-x: auto;
+  padding: 8px 9px;
+  border: 1px solid rgba(102, 113, 116, 0.13);
+  border-radius: 7px;
+  background: rgba(250, 249, 245, 0.72);
+}
+
+.formula .katex-display {
+  margin: 0;
+  text-align: left;
+}
+
+.formula .katex {
+  color: #1f2c30;
+  font-size: 1.02em;
+}
+
 .detail-shapes {
   display: grid;
   gap: 10px;

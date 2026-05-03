@@ -305,6 +305,94 @@ window.DSV4_GRAPH = (() => {
     if (nodes[id]) nodes[id].details = details;
   });
 
+  Object.entries({
+    "input-ids": [{ title: "입력 텐서", latex: String.raw`\mathrm{ids}\in\mathbb{N}^{B\times S}`, note: "토크나이저 결과가 batch와 sequence 축을 가진 정수 matrix로 들어옵니다." }],
+    embedding: [{ title: "Embedding lookup", latex: String.raw`x_{b,s}=E[\mathrm{ids}_{b,s}],\qquad x\in\mathbb{R}^{B\times S\times D}`, note: "TP에서는 vocab shard별 lookup 결과를 합쳐 동일한 hidden vector를 만듭니다." }],
+    "hc-expand": [{ title: "Lane repeat", latex: String.raw`X_{b,s,l,d}=x_{b,s,d},\qquad l\in\{1,\dots,4\}`, note: "초기 hidden stream을 4개의 residual lane으로 복제합니다." }],
+    "stack-entry": [{ title: "반복 layer state", latex: String.raw`X^{(0)}\in\mathbb{R}^{B\times S\times 4\times D},\qquad X^{(n+1)}=F_n(X^{(n)})`, note: "아래 그래프는 선택된 대표 decoder layer의 내부 전개입니다." }],
+
+    "mhc-attn": [{ title: "Attention mHC wrapper", latex: String.raw`X'=\operatorname{mHCWrite}(X,\operatorname{Attention}(\operatorname{mHCRead}(X)))`, note: "attention 연산 자체보다 read/write lane projection을 감싸는 구조입니다." }],
+    "hc-flatten": [{ title: "Controller flatten", latex: String.raw`z_{b,s}=\operatorname{concat}(X_{b,s,1,:},\dots,X_{b,s,4,:})\in\mathbb{R}^{4D}`, note: "controller path가 4개 lane을 한 번에 보도록 lane 축을 hidden 축으로 합칩니다." }],
+    "hc-controller": [{ title: "Controller linear", latex: String.raw`m=zW_{\mathrm{hc}}^\top,\qquad m\in\mathbb{R}^{24}`, note: "24개 출력은 pre 4개, post 4개, comb 16개로 split됩니다." }],
+    "hc-sinkhorn": [
+      { title: "Split", latex: String.raw`m\rightarrow (p_{\mathrm{read}}\in\mathbb{R}^{4},\;p_{\mathrm{write}}\in\mathbb{R}^{4},\;C\in\mathbb{R}^{4\times4})` },
+      { title: "Doubly stochastic mixing", latex: String.raw`\tilde C=\operatorname{Sinkhorn}(C),\qquad \sum_i \tilde C_{ij}\approx 1,\quad \sum_j \tilde C_{ij}\approx 1`, note: "row/column 합을 안정화해 layer 간 residual gradient transport를 덜 흔들리게 만드는 목적입니다." },
+    ],
+    "hc-read": [{ title: "Read projection", latex: String.raw`x_{\mathrm{attn}}=\sum_{l=1}^{4}p_{\mathrm{read},l}\,X_l`, note: "4-lane residual을 attention이 받을 단일 hidden stream으로 읽습니다." }],
+    "attn-residual-mix": [{ title: "Residual lane mixing", latex: String.raw`M_l=\sum_{j=1}^{4}\tilde C_{l,j}X_j`, note: "기존 residual lane을 4x4 transport matrix로 섞습니다." }],
+    "attn-post-inject": [{ title: "Attention injection", latex: String.raw`I_l=p_{\mathrm{write},l}\,y_{\mathrm{attn}}`, note: "단일 attention output을 4개 lane으로 다시 분배합니다." }],
+    "hc-write": [{ title: "Attention writeback", latex: String.raw`X'_l=\sum_{j=1}^{4}\tilde C_{l,j}X_j+p_{\mathrm{write},l}\,y_{\mathrm{attn}}`, note: "residual lane mixing과 attention output injection을 더해 다음 state를 만듭니다." }],
+
+    attention: [{ title: "Attention summary", latex: String.raw`y=\operatorname{Attn}(Q(x),K_{\mathcal{I}},V_{\mathcal{I}})W_o`, note: "인덱스 집합 I는 SWA, CSA, HCA mode에 따라 달라집니다." }],
+    "q-path": [{ title: "Low-rank query path", latex: String.raw`Q=\operatorname{RoPE}(\operatorname{reshape}(\operatorname{RMSNorm}(xW_{q,a})W_{q,b}))`, note: "overview에서는 하위 q-wqa/q-norm/q-wqb/q-rope 노드로 풀어 보여줍니다." }],
+    "q-wqa": [{ title: "Query A projection", latex: String.raw`q_a=xW_{q,a}^{\top},\qquad q_a\in\mathbb{R}^{B\times S\times Q_r}` }],
+    "q-norm": [{ title: "RMSNorm", latex: String.raw`\operatorname{RMSNorm}(u)=\frac{u}{\sqrt{\frac{1}{n}\sum_i u_i^2+\epsilon}}\odot w`, note: "q_lora_rank 축을 기준으로 scale을 맞춘 뒤 main query와 indexer query가 이 출력을 공유합니다." }],
+    "q-wqb": [{ title: "Query B projection", latex: String.raw`q_b=q_a^{\mathrm{norm}}W_{q,b}^{\top},\qquad q_b\in\mathbb{R}^{B\times S\times (H\cdot512)}` }],
+    "q-reshape": [{ title: "Head split + renorm", latex: String.raw`Q=\operatorname{reshape}(q_b,[B,S,H,512]),\qquad Q_h\leftarrow \operatorname{RMSNorm}(Q_h)`, note: "projection 출력의 channel 축을 head 축과 head dim 축으로 나눕니다." }],
+    "q-rope": [{ title: "RoPE slice", latex: String.raw`\operatorname{RoPE}(q_{2i},q_{2i+1},p)=\begin{bmatrix}q_{2i}\cos\theta_{p,i}-q_{2i+1}\sin\theta_{p,i}\\q_{2i}\sin\theta_{p,i}+q_{2i+1}\cos\theta_{p,i}\end{bmatrix}`, note: "512차원 중 마지막 64차원에 position phase를 넣습니다." }],
+
+    "kv-path": [{ title: "Shared KV path", latex: String.raw`k\!v=\operatorname{RMSNorm}(xW_{kv}^{\top}),\qquad k\!v\in\mathbb{R}^{B\times S\times512}`, note: "동일한 512-dim vector가 key/value cache의 공유 표현으로 쓰입니다." }],
+    "kv-wkv": [{ title: "Shared KV projection", latex: String.raw`u=xW_{kv}^{\top},\qquad u\in\mathbb{R}^{B\times S\times512}` }],
+    "kv-norm": [{ title: "KV RMSNorm", latex: String.raw`k\!v=\frac{u}{\sqrt{\operatorname{mean}(u^2)+\epsilon}}\odot w_{kv}`, note: "RoPE, compressor, cache write 전에 shared KV scale을 맞춥니다." }],
+    "kv-rope-quant": [{ title: "RoPE + quantized content", latex: String.raw`k=[\operatorname{FP8Sim}(k_{\mathrm{nope}}),\operatorname{RoPE}(k_{\mathrm{rope}},p)]`, note: "content 448 dim은 low precision simulation, RoPE 64 dim은 position-aware key로 남깁니다." }],
+    "kv-cache": [{ title: "Cache layout", latex: String.raw`\mathrm{cache}=[\mathrm{SWA}_{0:128}\;||\;\mathrm{Compressed}_{0:\lfloor T/R\rfloor}]`, note: "앞쪽은 최근 128개 uncompressed entry, 뒤쪽은 compressed entry 영역입니다." }],
+    "window-topk": [{ title: "Sliding window ids", latex: String.raw`\mathcal{I}_{\mathrm{swa}}=\{t\mid \max(0,n-127)\le t\le n\}`, note: "score top-k가 아니라 최근 local token index set입니다." }],
+    "attn-selected": [{ title: "KV index union", latex: String.raw`\mathcal{I}=\mathcal{I}_{\mathrm{swa}}\cup\mathcal{I}_{\mathrm{compressed}}`, note: "CSA는 indexer top-k, HCA는 valid compressed block 전체, MTP는 SWA만 사용합니다." }],
+    "sparse-attn": [
+      { title: "Attention logits", latex: String.raw`a_{h,t}=\frac{\langle q_h,k_{h,t}\rangle}{\sqrt{512}}+\mathrm{mask}_t+\mathrm{sink}_h` },
+      { title: "Weighted value sum", latex: String.raw`y_h=\sum_{t\in\mathcal{I}}\operatorname{softmax}(a_h)_t\,v_t`, note: "선택된 KV entry만 gather해 online-softmax kernel에서 계산합니다." },
+    ],
+    "o-proj": [{ title: "Grouped output projection", latex: String.raw`y=\operatorname{GroupProj}_b(\operatorname{GroupProj}_a(\operatorname{concat}_h y_h))`, note: "head output을 group low-rank projection으로 D차원 hidden stream에 복원합니다." }],
+
+    compressor: [{ title: "Compression summary", latex: String.raw`c_j=\operatorname{Pool}_{t\in\mathrm{block}(j)}(W_{kv}x_t,W_gx_t,\mathrm{APE}_t)`, note: "R=4/128 layer mode에 따라 block span과 overlap 처리가 달라집니다." }],
+    "comp-wkv": [{ title: "Compressor KV candidate", latex: String.raw`u_t=x_tW_{\mathrm{comp},kv}^{\top}` }],
+    "comp-wgate": [{ title: "Compressor gate score", latex: String.raw`g_t=x_tW_{\mathrm{comp},g}^{\top}+\mathrm{APE}_t`, note: "softmax pooling weight를 만들기 위한 learned score입니다." }],
+    "tail-state": [{ title: "Tail state update", latex: String.raw`\mathrm{tail}_{n+1}=\operatorname{append\_and\_trim}(\mathrm{tail}_{n},u_n,g_n;R)`, note: "decode에서 아직 block이 완성되지 않은 token projection을 임시 저장합니다." }],
+    "overlap-transform": [{ title: "CSA overlap span", latex: String.raw`\mathrm{span}_j=[x_{4j-4},\dots,x_{4j+3}]`, note: "c4a는 stride 4이지만 pooling span은 8-token overlap으로 볼 수 있습니다." }],
+    "gated-pool": [{ title: "Softmax-gated pooling", latex: String.raw`c_j=\sum_{t\in\mathrm{block}(j)}u_t\cdot\operatorname{softmax}(g)_t`, note: "여러 native token을 하나의 compressed KV entry로 줄입니다." }],
+    "comp-norm-rope": [{ title: "Compressed norm + anchor RoPE", latex: String.raw`\hat c_j=\operatorname{RoPE}(\operatorname{RMSNorm}(c_j),a_j),\qquad a_j\in\{0,R,2R,\dots\}`, note: "compressed block 내부 token 위치가 아니라 anchor position을 사용합니다." }],
+    "comp-cache-write": [{ title: "Compressed cache write", latex: String.raw`\mathrm{cache}_{128+j}\leftarrow \hat c_j,\qquad j=\left\lfloor\frac{n}{R}\right\rfloor`, note: "SWA 영역 뒤쪽 compressed cache slot에 기록합니다." }],
+    "hca-all-compressed": [{ title: "HCA compressed set", latex: String.raw`\mathcal{I}_{\mathrm{compressed}}=\{0,\dots,\lfloor T/128\rfloor-1\}`, note: "HCA layer에서는 Lightning indexer 없이 valid c128a block 전체를 사용합니다." }],
+
+    indexer: [{ title: "Indexer summary", latex: String.raw`\mathcal{I}_{\mathrm{csa}}=\operatorname{TopK}(\operatorname{Score}(q_{\mathrm{idx}},C_{\mathrm{idx}}),K)`, note: "R=4 CSA에서 compressed block 후보를 sparse하게 고릅니다." }],
+    "idx-q": [{ title: "Indexer query projection", latex: String.raw`q_{\mathrm{idx}}=\operatorname{reshape}(q_{\mathrm{norm}}W_{\mathrm{idx},q}^{\top},[B,S,64,128])` }],
+    "idx-rotate": [{ title: "Cheap rotated query", latex: String.raw`\tilde q=\operatorname{FP4}(\operatorname{Hadamard}(\operatorname{RoPE}(q_{\mathrm{idx}})))`, note: "정확한 attention Q가 아니라 retrieval score용 cheap representation입니다." }],
+    "idx-cache": [{ title: "Index cache", latex: String.raw`C_{\mathrm{idx}}\in\mathbb{R}^{B\times \lfloor T/4\rfloor\times128}`, note: "main 512-dim KV cache와 별도의 128-dim indexer cache입니다." }],
+    "idx-einsum": [{ title: "Block score", latex: String.raw`s_{b,s,h,j}=\operatorname{ReLU}(\langle \tilde q_{b,s,h},C_{\mathrm{idx},b,j}\rangle)`, note: "candidate compressed block별 retrieval score를 계산합니다." }],
+    "idx-weight": [{ title: "Head weighted sum", latex: String.raw`S_{b,s,j}=\sum_{h=1}^{64}\alpha_{b,s,h}\,s_{b,s,h,j}`, note: "query-dependent head weight로 64개 index head score를 하나로 합칩니다." }],
+    "idx-topk": [{ title: "Causal TopK", latex: String.raw`\mathcal{I}_{\mathrm{topk}}=\operatorname{TopK}(S+\mathrm{causal\_mask},K)`, note: "Pro는 K=1024, Flash는 K=512로 표시됩니다." }],
+
+    "mhc-ffn": [{ title: "MoE mHC wrapper", latex: String.raw`X'=\operatorname{mHCWrite}_{ffn}(X,\operatorname{MoE}(\operatorname{mHCRead}_{ffn}(X)))` }],
+    "ffn-hc-flatten": [{ title: "MoE controller flatten", latex: String.raw`z^{ffn}_{b,s}=\operatorname{concat}_{l=1}^{4}X_{b,s,l,:}` }],
+    "ffn-hc-controller": [{ title: "MoE controller linear", latex: String.raw`m^{ffn}=z^{ffn}W_{\mathrm{hc},ffn}^{\top},\qquad m^{ffn}\in\mathbb{R}^{24}` }],
+    "ffn-hc-sinkhorn": [{ title: "MoE split + Sinkhorn", latex: String.raw`m^{ffn}\rightarrow(p_{\mathrm{read}},p_{\mathrm{write}},\tilde C),\qquad \tilde C=\operatorname{Sinkhorn}(C)` }],
+    "hc-pre-moe": [{ title: "MoE read projection", latex: String.raw`x_{\mathrm{moe}}=\sum_{l=1}^{4}p^{ffn}_{\mathrm{read},l}X_l` }],
+    "ffn-residual-mix": [{ title: "MoE residual mixing", latex: String.raw`M^{ffn}_l=\sum_{j=1}^{4}\tilde C^{ffn}_{l,j}X_j` }],
+    "ffn-post-inject": [{ title: "MoE output injection", latex: String.raw`I^{ffn}_l=p^{ffn}_{\mathrm{write},l}y_{\mathrm{moe}}` }],
+    "hc-post-moe": [{ title: "MoE writeback", latex: String.raw`X^{next}_l=\sum_j\tilde C^{ffn}_{l,j}X_j+p^{ffn}_{\mathrm{write},l}y_{\mathrm{moe}}` }],
+
+    moe: [{ title: "MoE summary", latex: String.raw`y_{\mathrm{moe}}=\sum_{i\in\mathcal{E}(x)}w_iE_i(x)+E_{\mathrm{shared}}(x)`, note: "routed expert top-6과 always-on shared expert를 합칩니다." }],
+    gate: [{ title: "Routing abstraction", latex: String.raw`\mathcal{E}(x)=\begin{cases}\operatorname{tid2eid}(\mathrm{ids}),&\ell<3\\\operatorname{TopK}(\operatorname{score}(x),6),&\ell\ge3\end{cases}` }],
+    "gate-score": [{ title: "Expert score", latex: String.raw`r=\sqrt{\operatorname{softplus}(xW_g^\top)},\qquad r\in\mathbb{R}^{B S\times E}`, note: "selection bias는 expert 선택에만 영향을 주고 weight는 원 score에서 gather합니다." }],
+    "hash-route": [{ title: "Token-id routing", latex: String.raw`\mathcal{E}_{b,s}=\mathrm{tid2eid}[\mathrm{ids}_{b,s}]`, note: "초반 layer에서는 score top-k가 아니라 input id 기반 expert id table을 사용합니다." }],
+    "topk-route": [{ title: "Activation routing", latex: String.raw`\mathcal{E}_{b,s}=\operatorname{TopK}(r_{b,s}+b_{\mathrm{route}},6)` }],
+    "route-weights": [{ title: "Normalize route weights", latex: String.raw`w_i=\frac{r_i}{\sum_{j\in\mathcal{E}}r_j}\cdot \mathrm{route\_scale}`, note: "선택된 expert의 original score를 normalize한 뒤 scale을 곱합니다." }],
+    "routed-experts": [{ title: "Routed expert FFN", latex: String.raw`E_i(x)=W_{2,i}\left(\operatorname{SiLU}(W_{1,i}x)\odot W_{3,i}x\right)` }],
+    "expert-dispatch": [{ title: "Token dispatch", latex: String.raw`X_i=\{x_n\mid i\in\mathcal{E}(x_n)\}`, note: "expert id별 token row를 모아 해당 expert weight로 처리합니다." }],
+    "expert-w1w3": [{ title: "Gate/up projection", latex: String.raw`g=xW_{1,i}^{\top},\qquad u=xW_{3,i}^{\top}` }],
+    swiglu: [{ title: "SwiGLU", latex: String.raw`h=\operatorname{SiLU}(\operatorname{clip}(g))\odot \operatorname{clip}(u)`, note: "공개 config의 swiglu_limit을 반영해 gate/up activation을 clamp합니다." }],
+    "expert-w2": [{ title: "Down projection", latex: String.raw`y_i=hW_{2,i}^{\top},\qquad y_i\in\mathbb{R}^{D}` }],
+    "shared-expert": [{ title: "Shared expert", latex: String.raw`y_{\mathrm{shared}}=W_{2,s}\left(\operatorname{SiLU}(W_{1,s}x)\odot W_{3,s}x\right)`, note: "routing과 무관하게 모든 token에서 계산됩니다." }],
+    "expert-combine": [{ title: "Routed + shared combine", latex: String.raw`y=\sum_{i\in\mathcal{E}(x)}w_i\,E_i(x)+E_{\mathrm{shared}}(x)` }],
+
+    "stack-exit": [{ title: "Final decoder state", latex: String.raw`X^{(L)}=F_{L-1}\circ\cdots\circ F_0(X^{(0)})`, note: "LM head는 각 layer가 아니라 최종 stack state 뒤에 붙습니다." }],
+    head: [{ title: "HC collapse + LM head", latex: String.raw`h=\operatorname{HCHead}(X^{(L)}_{:,-1,:,:}),\qquad \mathrm{logits}=hW_{\mathrm{lm}}^\top`, note: "공식 path는 마지막 token만 vocab projection합니다." }],
+    mtp: [{ title: "MTP branch", latex: String.raw`y_{\mathrm{mtp}}=\operatorname{MTP}(X^{(L)},\mathrm{ids})`, note: "보조 next-token prediction block이며 attention mode는 SWA-only로 표시합니다." }],
+    logits: [{ title: "Vocabulary scores", latex: String.raw`p(v\mid x)=\operatorname{softmax}(\mathrm{logits})_v`, note: "sampling 정책은 모델 구조 그래프 밖의 runtime 단계입니다." }],
+  }).forEach(([id, formula]) => {
+    if (nodes[id]) nodes[id].details = { ...nodes[id].details, formula };
+  });
+
   const scenes = {
     overview: scene("overview", "Full V4 internal graph", "All major controller paths, cache paths, routing paths, and expert internals are expanded in one graph.", [
       "input-ids", "embedding", "hc-expand", "stack-entry",

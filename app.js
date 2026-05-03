@@ -699,6 +699,9 @@ function renderDetailCards(details) {
   return Object.entries(details)
     .filter(([, value]) => value)
     .map(([label, value]) => {
+      if (label === "formula") {
+        return `<section class="formula-card"><h3>${escapeHtml(labels[label])}</h3>${renderFormulaList(value)}</section>`;
+      }
       const items = Array.isArray(value) ? value : [value];
       const body =
         items.length === 1
@@ -707,6 +710,31 @@ function renderDetailCards(details) {
       return `<section><h3>${escapeHtml(labels[label] || label)}</h3>${body}</section>`;
     })
     .join("");
+}
+
+function renderFormulaList(value) {
+  const items = Array.isArray(value) ? value : [{ latex: value }];
+  return items
+    .map((item) => {
+      const formula = typeof item === "string" ? { latex: item } : item;
+      const title = formula.title ? `<h4>${escapeHtml(resolve(formula.title))}</h4>` : "";
+      const note = formula.note ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
+      return `<div class="formula-block">${title}<div class="formula">${renderLatex(resolve(formula.latex || ""))}</div>${note}</div>`;
+    })
+    .join("");
+}
+
+function renderLatex(source) {
+  if (!source) return "";
+  if (window.katex?.renderToString) {
+    return window.katex.renderToString(source, {
+      displayMode: true,
+      throwOnError: false,
+      strict: false,
+      trust: false,
+    });
+  }
+  return `<code>${escapeHtml(source)}</code>`;
 }
 
 function openScene(nextScene) {
