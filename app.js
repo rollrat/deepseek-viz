@@ -480,6 +480,8 @@ async function renderGraph() {
     .attr("y", (item) => item.y + 25)
     .text((item) => item.label);
 
+  prioritizeGraphGroups();
+
   nodeLayer
     .selectAll("g.node")
     .data(nodeData, (item) => item.id)
@@ -1076,11 +1078,24 @@ function renderSelectionState() {
     "class",
     (item) => `graph-group ${item.category} ${isGroupActive(item) ? "active" : ""} ${state.graphDetail === "detailed" ? "clickable" : ""}`,
   );
+  prioritizeGraphGroups();
   d3.selectAll("#minimapGroups rect").attr("class", (item) => `minimap-group ${isGroupActive(item) ? "active" : ""}`);
   d3.selectAll("g.node").attr(
     "class",
     (item) => `node ${item.doc.category} ${selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`,
   );
+}
+
+function prioritizeGraphGroups() {
+  d3.selectAll("g.graph-group").sort((a, b) => groupStackRank(a) - groupStackRank(b));
+}
+
+function groupStackRank(group) {
+  const selectedNodeRank = group.nodeIds?.includes(state.selected) ? 100 : 0;
+  const selectedGroupRank = state.selectedGroup === group.label ? 200 : 0;
+  const area = Math.max(1, (group.width || 0) * (group.height || 0));
+  const specificityRank = 1 / area;
+  return selectedGroupRank + selectedNodeRank + specificityRank;
 }
 
 function renderDetailCards(details) {
