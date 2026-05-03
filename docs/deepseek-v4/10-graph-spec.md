@@ -36,13 +36,17 @@ The main screen should be a large centered graph, not a document page. Use the d
 | `indexer` | Indexer | `[B,S,Qr] -> [B,S,topK]` |
 | `sparse-attn` | Sparse Attention | selected KV -> `[B,S,H,512]` |
 | `grouped-o-proj` | Grouped Output Projection | `[B,S,H,512] -> [B,S,D]` |
-| `hc-post-attn` | HC Post: Attention | `[B,S,D] -> [B,S,4,D]` |
+| `attn-residual-mix` | Attention Residual Lane Mixing | `comb [B,S,4,4] @ residual [B,S,4,D] -> [B,S,4,D]` |
+| `attn-post-inject` | Attention Output Injection | `post [B,S,4] * attention [B,S,D] -> [B,S,4,D]` |
+| `hc-write` | Attention HC Writeback | `mixed residual + injected attention -> [B,S,4,D]` |
 | `hc-pre-moe` | HC Pre: MoE | `[B,S,4,D] -> [B,S,D]` |
 | `moe` | MoE Router + Experts | `[B,S,D] -> [B,S,D]` |
 | `gate` | Router Gate | `[B*S,D] -> [B*S,E]` |
 | `routed-experts` | 6 Routed Experts | `[N_e,D] -> [N_e,D]` |
 | `shared-expert` | Shared Expert | `[B*S,D] -> [B*S,D]` |
-| `hc-post-moe` | HC Post: MoE | `[B,S,D] -> [B,S,4,D]` |
+| `ffn-residual-mix` | MoE Residual Lane Mixing | `comb [B,S,4,4] @ residual [B,S,4,D] -> [B,S,4,D]` |
+| `ffn-post-inject` | MoE Output Injection | `post [B,S,4] * MoE [B,S,D] -> [B,S,4,D]` |
+| `hc-post-moe` | MoE HC Writeback | `mixed residual + injected MoE -> [B,S,4,D]` |
 | `head` | HC Head + LM Head | `[B,S,4,D] -> [B,V]` |
 | `mtp` | MTP Block | optional `[B,S,4,D] -> [B,V]` |
 

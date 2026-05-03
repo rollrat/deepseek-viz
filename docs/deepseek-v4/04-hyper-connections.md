@@ -2,7 +2,9 @@
 
 ## Purpose
 
-V4 block은 단순 residual stream `[B,S,D]` 하나를 계속 더하는 구조가 아니다. block 사이 hidden state는 `[B,S,M,D]`이고, 각 sublayer 앞뒤에서 hyper-connection mixing을 한다. 공개 code에서는 이를 `hc_pre`와 `hc_post`로 구현한다.
+DeepSeek V4 block은 단일 residual stream `[B,S,D]`만 계속 더하는 구조가 아니다.
+Block 사이 hidden state는 residual lane 축을 가진 `[B,S,M,D]`이고, 공개 코드 기준 `M = hc_mult = 4`다.
+각 attention / MoE sublayer 앞뒤에서 mHC controller가 `pre`, `post`, `comb`를 만들고, 이 중 `comb`가 residual lane mixing의 핵심이다.
 
 ## Constants
 
@@ -12,58 +14,87 @@ mix_hc = (2 + M) * M = 24
 hc_dim = M * D
 ```
 
-Pro에서는 `hc_dim = 4 * 7168 = 28672`, Flash에서는 `hc_dim = 4 * 4096 = 16384`다.
+Pro에서는 `hc_dim = 4 * 7168 = 28672`, Flash에서는 `hc_dim = 4 * 4096 = 16384`.
 
-## hc_pre
-
-`hc_pre`는 4개 hidden lanes를 하나의 sublayer input으로 접는다.
+## Controller
 
 ```text
 x: [B,S,M,D]
 flatten hidden lanes: [B,S,M*D]
 mixes = linear(x, hc_fn): [B,S,24]
 hc_split_sinkhorn(mixes) -> pre, post, comb
-pre: [B,S,M]
+pre:  [B,S,M]
 post: [B,S,M]
 comb: [B,S,M,M]
-y = sum(pre * x over M): [B,S,D]
 ```
 
-`pre`는 attention 또는 MoE에 들어갈 단일 hidden vector를 만든다. `post`와 `comb`는 sublayer output을 다시 4개 lane으로 복원할 때 사용된다.
+`pre`는 residual lanes를 sublayer input `[B,S,D]`로 읽는 가중치다.
+`post`는 sublayer output `[B,S,D]`를 다시 4개 lane에 주입하는 가중치다.
+`comb`는 기존 residual lanes `[B,S,4,D]`를 lane 축에서 서로 섞는 residual lane mixing matrix다.
 
-## hc_post
+## Residual Lane Mixing
+
+```text
+residual: [B,S,M,D]
+comb:     [B,S,M,M]
+mixed_residual = comb @ residual
+mixed_residual: [B,S,M,D]
+```
+
+이 부분이 사용자가 그래프에서 직접 보고 싶어 하는 `residual lane mixing`이다.
+Attention writeback과 MoE writeback 양쪽에 같은 형태가 있고, 각각 별도의 mHC controller weights를 쓴다.
+
+## Sublayer Output Injection
 
 ```text
 sublayer_out: [B,S,D]
-residual: [B,S,M,D]
-post: [B,S,M]
-comb: [B,S,M,M]
-y = post * sublayer_out + comb * residual
+post:         [B,S,M]
+injected = post * sublayer_out
+injected: [B,S,M,D]
+```
+
+`post`는 sublayer output을 각 residual lane에 얼마나 주입할지 결정한다.
+이건 residual lane mixing과 별도의 항이다.
+
+## HC Writeback
+
+```text
+output = mixed_residual + injected
 output: [B,S,M,D]
 ```
 
-시각화에서는 `post`를 sublayer output이 각 lane으로 얼마나 들어가는지, `comb`를 기존 lane끼리 어떻게 섞이는지 보여주면 된다.
+따라서 writeback은 다음 두 항의 합이다.
 
-## Block-level flow
+```text
+comb * residual lanes
++ post * sublayer_out
+```
+
+## Block-Level Flow
 
 ```text
 hidden [B,S,4,D]
-  -> hc_pre(attn) [B,S,D]
-  -> attn_norm
+  -> mHC controller(attn) -> pre/post/comb
+  -> pre read -> attention input [B,S,D]
   -> attention [B,S,D]
-  -> hc_post [B,S,4,D]
-  -> hc_pre(ffn) [B,S,D]
-  -> ffn_norm
+  -> attention residual lane mixing: comb @ residual
+  -> attention output injection: post * attention
+  -> attention HC writeback [B,S,4,D]
+  -> mHC controller(ffn) -> pre/post/comb
+  -> pre read -> MoE input [B,S,D]
   -> MoE [B,S,D]
-  -> hc_post [B,S,4,D]
+  -> MoE residual lane mixing: comb @ residual
+  -> MoE output injection: post * MoE
+  -> MoE HC writeback [B,S,4,D]
 ```
 
-## Graph node fields
+## Graph Nodes
 
-- Node id: `m-hc`
-- Title: `Manifold Hyper-Connections`
-- Input shape: `[B,S,4,D]`
-- Intermediate shapes: `[B,S,4D]`, `[B,S,24]`, `[B,S,D]`
-- Output shape: `[B,S,4,D]`
-- Expand mode: show `pre`, `post`, `comb` as three subnodes.
+The overview graph should expose these as first-class nodes:
 
+- `Attention Residual Lane Mixing`: `comb [B,S,4,4] @ residual [B,S,4,D]`
+- `Attention Output Injection`: `post [B,S,4] * attention [B,S,D]`
+- `Attention HC Writeback`: sum of mixed residual and injected attention
+- `MoE Residual Lane Mixing`: `comb [B,S,4,4] @ residual [B,S,4,D]`
+- `MoE Output Injection`: `post [B,S,4] * MoE [B,S,D]`
+- `MoE HC Writeback`: sum of mixed residual and injected MoE
