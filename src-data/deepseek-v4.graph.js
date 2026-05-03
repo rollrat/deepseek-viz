@@ -342,34 +342,73 @@ window.DSV4_GRAPH = (() => {
       group("Final output only", ["stack-exit", "head", "mtp", "logits"], "output"),
     ]),
     mhc: scene("mhc", "mHC controller/data path", "pre/post/comb generation plus read/write data path.", [
-      "hc-expand", "hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read", "attention", "moe", "hc-write", "hc-post-moe",
+      "hc-expand",
+      "hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read",
+      "attention", "attn-residual-mix", "attn-post-inject", "hc-write",
+      "ffn-hc-flatten", "ffn-hc-controller", "ffn-hc-sinkhorn", "hc-pre-moe",
+      "moe", "ffn-residual-mix", "ffn-post-inject", "hc-post-moe",
     ], [
-      e("hc-expand", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"), e("hc-read", "attention"), e("hc-read", "moe"), e("attention", "hc-write"), e("moe", "hc-write"), e("hc-sinkhorn", "hc-write", "branch"), e("hc-expand", "hc-write", "branch"), e("hc-write", "hc-post-moe"),
+      e("hc-expand", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"), e("hc-read", "attention"),
+      e("hc-sinkhorn", "attn-residual-mix", "branch"), e("hc-expand", "attn-residual-mix", "branch"), e("attention", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch"), e("attn-residual-mix", "hc-write"), e("attn-post-inject", "hc-write"),
+      e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe"), e("hc-pre-moe", "moe"),
+      e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch"), e("moe", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch"), e("ffn-residual-mix", "hc-post-moe"), e("ffn-post-inject", "hc-post-moe"),
+    ], [
+      group("mHC attention controller + read path", ["hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read"], "hc"),
+      group("mHC attention residual mixing", ["attn-residual-mix", "attn-post-inject", "hc-write"], "hc"),
+      group("mHC MoE controller + read path", ["ffn-hc-flatten", "ffn-hc-controller", "ffn-hc-sinkhorn", "hc-pre-moe"], "hc"),
+      group("mHC MoE residual mixing", ["ffn-residual-mix", "ffn-post-inject", "hc-post-moe"], "hc"),
     ]),
     attention: scene("attention", "Attention internals", "Q LoRA, shared KV, cache IDs, sparse attention, grouped output projection.", [
       "mhc-attn", "q-wqa", "q-norm", "q-wqb", "q-reshape", "q-rope", "kv-wkv", "kv-norm", "kv-rope-quant", "window-topk", "compressor", "indexer", "attn-selected", "sparse-attn", "o-proj", "hc-write",
     ], [
       e("mhc-attn", "q-wqa"), e("q-wqa", "q-norm"), e("q-norm", "q-wqb"), e("q-wqb", "q-reshape"), e("q-reshape", "q-rope"), e("mhc-attn", "kv-wkv", "branch"), e("kv-wkv", "kv-norm"), e("kv-norm", "kv-rope-quant"), e("kv-rope-quant", "window-topk", "branch"), e("kv-rope-quant", "compressor", "branch"), e("q-norm", "indexer", "branch"), e("window-topk", "attn-selected"), e("compressor", "attn-selected", "branch"), e("indexer", "attn-selected", "branch"), e("q-rope", "sparse-attn"), e("attn-selected", "sparse-attn"), e("sparse-attn", "o-proj"), e("o-proj", "hc-write"),
+    ], [
+      group("mHC attention entry/exit", ["mhc-attn", "hc-write"], "hc"),
+      group("Query LoRA + RoPE", ["q-wqa", "q-norm", "q-wqb", "q-reshape", "q-rope"], "attention"),
+      group("Shared KV + SWA", ["kv-wkv", "kv-norm", "kv-rope-quant", "window-topk"], "cache"),
+      group("Compressed selection", ["compressor", "indexer", "attn-selected"], "attention"),
+      group("Attention output projection", ["sparse-attn", "o-proj"], "attention"),
     ]),
     compression: scene("compression", "KV cache and compressor", "Window cache, compressed cache, tail state, overlap pooling, and cache writes.", [
       "kv-path", "kv-cache", "window-topk", "comp-wkv", "comp-wgate", "tail-state", "overlap-transform", "gated-pool", "comp-norm-rope", "comp-cache-write", "sparse-attn",
     ], [
       e("kv-path", "kv-cache"), e("kv-cache", "window-topk"), e("kv-path", "comp-wkv", "branch"), e("kv-path", "comp-wgate", "branch"), e("comp-wkv", "tail-state"), e("comp-wgate", "tail-state"), e("tail-state", "overlap-transform"), e("overlap-transform", "gated-pool"), e("comp-wgate", "gated-pool", "branch"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"), e("comp-cache-write", "sparse-attn"),
+    ], [
+      group("SWA window cache", ["kv-path", "kv-cache", "window-topk"], "cache"),
+      group("Compressor projections", ["comp-wkv", "comp-wgate"], "cache"),
+      group("Compressor tail + overlap", ["tail-state", "overlap-transform"], "cache"),
+      group("Compressed entry write", ["gated-pool", "comp-norm-rope", "comp-cache-write"], "cache"),
+      group("Attention consumer", ["sparse-attn"], "attention"),
     ]),
     indexer: scene("indexer", "Lightning indexer", "R=4 compressed block selector.", [
       "q-norm", "idx-q", "idx-rotate", "idx-cache", "idx-einsum", "idx-weight", "idx-topk", "attn-selected",
     ], [
       e("q-norm", "idx-q"), e("idx-q", "idx-rotate"), e("kv-path", "idx-cache", "branch"), e("idx-rotate", "idx-einsum"), e("idx-cache", "idx-einsum"), e("idx-einsum", "idx-weight"), e("idx-weight", "idx-topk"), e("idx-topk", "attn-selected"),
+    ], [
+      group("Indexer query path", ["q-norm", "idx-q", "idx-rotate"], "attention"),
+      group("Indexer compressed KV cache", ["idx-cache"], "cache"),
+      group("Score + head weighting", ["idx-einsum", "idx-weight"], "attention"),
+      group("TopK selected blocks", ["idx-topk", "attn-selected"], "attention"),
     ]),
     moe: scene("moe", "MoE and SwiGLU experts", "Routing, expert dispatch, FP4 SwiGLU experts, shared expert, and combine.", [
       "mhc-ffn", "gate-score", "hash-route", "topk-route", "route-weights", "expert-dispatch", "expert-w1w3", "swiglu", "expert-w2", "shared-expert", "expert-combine", "hc-post-moe",
     ], [
       e("mhc-ffn", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights"), e("topk-route", "route-weights"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu"), e("swiglu", "expert-w2"), e("mhc-ffn", "shared-expert", "branch"), e("expert-w2", "expert-combine"), e("shared-expert", "expert-combine"), e("expert-combine", "hc-post-moe"),
+    ], [
+      group("mHC MoE entry/exit", ["mhc-ffn", "hc-post-moe"], "hc"),
+      group("Router scores + ids", ["gate-score", "hash-route", "topk-route", "route-weights"], "routing"),
+      group("Routed expert dispatch", ["expert-dispatch"], "routing"),
+      group("SwiGLU expert internals", ["expert-w1w3", "swiglu", "expert-w2"], "expert"),
+      group("Shared expert + combine", ["shared-expert", "expert-combine"], "expert"),
     ]),
     output: scene("output", "Output and MTP", "Final HC head collapse, LM head, and MTP branch.", [
       "hc-post-moe", "head", "mtp", "logits",
     ], [
       e("hc-post-moe", "head"), e("head", "logits"), e("hc-post-moe", "mtp", "branch"),
+    ], [
+      group("Final stack state", ["hc-post-moe"], "hc"),
+      group("LM head path", ["head", "logits"], "output"),
+      group("MTP branch", ["mtp"], "output"),
     ]),
   };
 

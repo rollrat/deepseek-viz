@@ -92,6 +92,9 @@ function renderModePicker() {
   document.querySelectorAll("[data-layer-preset]").forEach((button) => {
     button.classList.toggle("active", Number(button.dataset.layerPreset) === state.layer);
   });
+  document.querySelectorAll("[data-scene-select]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.sceneSelect === state.scene);
+  });
 }
 
 function renderStats() {
@@ -577,6 +580,15 @@ document.addEventListener("click", (event) => {
   if (presetButton) {
     state.layer = Number(presetButton.dataset.layerPreset);
     render(true);
+    return;
+  }
+
+  const sceneButton = event.target.closest("[data-scene-select]");
+  if (sceneButton) {
+    if (sceneButton.dataset.sceneSelect === "indexer" && attentionMode() !== "csa") {
+      state.layer = 2;
+    }
+    openScene(sceneButton.dataset.sceneSelect);
     return;
   }
 

@@ -10,12 +10,21 @@
     <div class="app">
       <main class="graph-shell" aria-label="DeepSeek V4 graph canvas">
         <section class="canvas-card">
-          <div class="mode-picker" aria-label="attention layer mode">
-            <span>Representative layer</span>
+          <div class="mode-picker" aria-label="graph view controls">
+            <span>Layer mode</span>
             <button class="active" data-layer-preset="0" title="Layers 0-1 use HCA, R=128">L0-1 HCA</button>
             <button data-layer-preset="2" title="Even decoder layers use CSA-like compressed selection, R=4">L2,4...60 CSA</button>
             <button data-layer-preset="3" title="Odd decoder layers use HCA, R=128">L3,5...59 HCA</button>
             <button data-layer-preset="61" title="MTP path uses sliding-window attention, R=0">MTP SWA</button>
+            <i aria-hidden="true"></i>
+            <span>Group</span>
+            <button class="active" data-scene-select="overview" title="Show the full graph">전체</button>
+            <button data-scene-select="mhc" title="Show mHC controller and data paths">mHC</button>
+            <button data-scene-select="attention" title="Show attention internals">Attention</button>
+            <button data-scene-select="compression" title="Show cache and compression internals">Cache</button>
+            <button data-scene-select="indexer" title="Show Lightning indexer">Indexer</button>
+            <button data-scene-select="moe" title="Show MoE routing and experts">MoE</button>
+            <button data-scene-select="output" title="Show output head and MTP">Output</button>
           </div>
           <div class="zoom-actions" aria-label="graph zoom controls">
             <button id="zoomOut" title="Zoom out" aria-label="Zoom out">-</button>
