@@ -9,6 +9,7 @@ const state = {
 };
 
 const elk = new ELK();
+const ZOOM_EXTENT = [0.08, 14];
 let zoomBehavior;
 let lastLayout = { width: 1280, height: 1280 };
 let layoutOffset = { x: 0, y: 0 };
@@ -336,6 +337,7 @@ async function renderGraph() {
   const zoomLayer = d3.select("#zoomLayer");
   const groupLayer = d3.select("#groupLayer");
   const edgeLayer = d3.select("#edgeLayer");
+  const edgeLabelLayer = d3.select("#edgeLabelLayer");
   const nodeLayer = d3.select("#nodeLayer");
 
   svg.attr("viewBox", `0 0 ${lastLayout.width} ${lastLayout.height}`);
@@ -348,6 +350,7 @@ async function renderGraph() {
       from: edgeRef.v,
       to: edgeRef.w,
       type: edgeInfo.type,
+      label: edgeLabel(edgeRef.v, edgeRef.w, edgeInfo),
       points: edgeInfo.points.map((point) => ({ x: point.x - layoutOffset.x, y: point.y - layoutOffset.y })),
       active: state.selected === edgeRef.v || state.selected === edgeRef.w,
     });
@@ -363,6 +366,38 @@ async function renderGraph() {
     )
     .attr("class", (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${item.active ? "active" : ""}`)
     .attr("d", (item) => lineForPoints(item.points));
+
+  const edgeLabelJoin = edgeLabelLayer
+    .selectAll("g.edge-label")
+    .data(edgeData.filter((item) => item.label), (item) => item.id)
+    .join(
+      (enter) => {
+        const group = enter.append("g").attr("class", "edge-label");
+        group.append("rect");
+        group.append("text").attr("text-anchor", "middle").attr("dominant-baseline", "central");
+        return group;
+      },
+      (update) => update,
+      (exit) => exit.remove(),
+    )
+    .attr("class", (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${item.active ? "active" : ""}`)
+    .attr("transform", (item) => {
+      const point = pathMidpoint(item.points);
+      return `translate(${point.x},${point.y})`;
+    });
+
+  edgeLabelJoin.select("text").text((item) => item.label);
+  edgeLabelJoin.each(function () {
+    const group = d3.select(this);
+    const box = group.select("text").node().getBBox();
+    group
+      .select("rect")
+      .attr("x", box.x - 7)
+      .attr("y", box.y - 3)
+      .attr("width", box.width + 14)
+      .attr("height", box.height + 6)
+      .attr("rx", 5);
+  });
 
   const nodeData = visibleNodeIds().map((id) => {
     const laidOut = g.node(id);
@@ -427,7 +462,11 @@ async function renderGraph() {
   if (!zoomBehavior) {
     zoomBehavior = d3
       .zoom()
-      .scaleExtent([0.18, 5])
+      .scaleExtent(ZOOM_EXTENT)
+      .wheelDelta((event) => {
+        const modeFactor = event.deltaMode === 1 ? 0.06 : event.deltaMode ? 1 : 0.0028;
+        return -event.deltaY * modeFactor * (event.ctrlKey ? 7 : 1);
+      })
       .on("zoom", (event) => {
         zoomLayer.attr("transform", event.transform);
         updateMinimapViewport();
@@ -547,6 +586,49 @@ function lineForPoints(points) {
     .x((point) => point.x)
     .y((point) => point.y)
     .curve(d3.curveLinear)(points);
+}
+
+function edgeLabel(from, to, edgeInfo = {}) {
+  if (edgeInfo.label) return resolve(edgeInfo.label);
+  const source = DATA.nodes[from];
+  const target = DATA.nodes[to];
+  const sourceOutput = source ? resolve(source.output) : "";
+  const targetInput = target ? resolve(target.input) : "";
+  const label = sourceOutput || targetInput;
+  if (!label || label === "undefined") return "";
+  if (sourceOutput && targetInput && sourceOutput !== targetInput && sourceOutput.length > 34) {
+    return truncate(sourceOutput, 34);
+  }
+  return truncate(label, 38);
+}
+
+function pathMidpoint(points) {
+  if (!points || points.length === 0) return { x: 0, y: 0 };
+  if (points.length === 1) return points[0];
+
+  const segments = [];
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    segments.push({ from, to, length });
+    total += length;
+  }
+
+  let walked = 0;
+  const half = total / 2;
+  for (const segment of segments) {
+    if (walked + segment.length >= half) {
+      const ratio = segment.length === 0 ? 0 : (half - walked) / segment.length;
+      return {
+        x: segment.from.x + (segment.to.x - segment.from.x) * ratio,
+        y: segment.from.y + (segment.to.y - segment.from.y) * ratio,
+      };
+    }
+    walked += segment.length;
+  }
+  return points[Math.floor(points.length / 2)];
 }
 
 function nodeHtml(item) {

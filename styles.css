@@ -430,6 +430,42 @@ h1 {
   animation: none;
 }
 
+.edge-label {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.edge-label rect {
+  fill: rgba(249, 248, 244, 0.9);
+  stroke: rgba(92, 101, 104, 0.18);
+  stroke-width: 0.75;
+  vector-effect: non-scaling-stroke;
+}
+
+.edge-label text {
+  fill: #566166;
+  font-size: 9.5px;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.edge-label.branch {
+  opacity: 0.5;
+}
+
+.edge-label.active {
+  opacity: 1;
+}
+
+.edge-label.active rect {
+  fill: rgba(238, 249, 247, 0.95);
+  stroke: rgba(22, 118, 111, 0.34);
+}
+
+.edge-label.active text {
+  fill: var(--teal);
+}
+
 .graph-group rect {
   fill: rgba(249, 247, 241, 0.28);
   stroke: rgba(116, 121, 119, 0.22);
