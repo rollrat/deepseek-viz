@@ -1273,6 +1273,13 @@ function centerNode(id) {
     .call(zoomBehavior.transform, d3.zoomIdentity.translate(centerX - target.x * transform.k, centerY - target.y * transform.k).scale(transform.k));
 }
 
+function focusGroupNarrativeNode(id) {
+  state.selected = id;
+  state.groupHighlightActive = false;
+  renderSelectionState();
+  centerNode(id);
+}
+
 function truncate(value, max) {
   const text = String(value);
   return text.length > max ? `${text.slice(0, max - 1)}...` : text;
@@ -1334,10 +1341,7 @@ document.addEventListener("click", (event) => {
 
   const groupNodeButton = event.target.closest("[data-group-node]");
   if (groupNodeButton) {
-    state.selected = groupNodeButton.dataset.groupNode;
-    state.groupHighlightActive = false;
-    renderSelectionState();
-    centerNode(state.selected);
+    focusGroupNarrativeNode(groupNodeButton.dataset.groupNode);
     return;
   }
 
@@ -1363,6 +1367,12 @@ document.addEventListener("click", (event) => {
     renderPanelState();
     renderSelectionState();
   }
+});
+
+document.addEventListener("pointerover", (event) => {
+  const groupNodeButton = event.target.closest("[data-group-node]");
+  if (!groupNodeButton || groupNodeButton.contains(event.relatedTarget)) return;
+  focusGroupNarrativeNode(groupNodeButton.dataset.groupNode);
 });
 
 document.querySelector("#layerSlider")?.addEventListener("input", (event) => {
