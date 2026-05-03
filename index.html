@@ -8,43 +8,12 @@
   </head>
   <body>
     <div class="app">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">DeepSeek V4</p>
-          <h1>Tensor Flow Graph</h1>
-        </div>
-        <div class="top-controls">
-          <div class="mode-switch" role="group" aria-label="model variant">
-            <button class="segmented active" data-model="pro">Pro</button>
-            <button class="segmented" data-model="flash">Flash</button>
-          </div>
-          <div class="layer-control">
-            <span id="layerLabel">Layer 0</span>
-            <input id="layerSlider" type="range" min="0" max="61" value="0" />
-            <strong id="ratioLabel">R=128</strong>
-          </div>
-        </div>
-      </header>
-
       <main class="graph-shell" aria-label="DeepSeek V4 graph canvas">
         <section class="canvas-card">
-          <div class="graph-meta">
-            <div id="variantStats" class="stats-inline"></div>
-            <div class="graph-actions">
-              <div id="layerStrip" class="layer-strip" aria-label="compression layer strip"></div>
-              <div class="zoom-actions" aria-label="graph zoom controls">
-                <button id="zoomOut" title="축소" aria-label="축소">−</button>
-                <button id="zoomFit" title="맞춤" aria-label="맞춤">◎</button>
-                <button id="zoomIn" title="확대" aria-label="확대">+</button>
-              </div>
-            </div>
-          </div>
-          <div class="scene-bar">
-            <button id="backScene" class="scene-back">Overview</button>
-            <div>
-              <strong id="sceneTitle">V4 overview</strong>
-              <span id="sceneSubtitle">Top-level tensor flow.</span>
-            </div>
+          <div class="zoom-actions" aria-label="graph zoom controls">
+            <button id="zoomOut" title="Zoom out" aria-label="Zoom out">-</button>
+            <button id="zoomFit" title="Fit graph" aria-label="Fit graph">◎</button>
+            <button id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
           </div>
 
           <svg id="graph" viewBox="0 0 1280 1280" role="img" aria-label="DeepSeek V4 top to bottom tensor graph">
@@ -91,10 +60,10 @@
       </main>
     </div>
 
-    <script src="./node_modules/d3/dist/d3.min.js?v=elk-layout"></script>
-    <script src="./node_modules/dagre/dist/dagre.min.js?v=elk-layout"></script>
-    <script src="./node_modules/elkjs/lib/elk.bundled.js?v=elk-layout"></script>
-    <script src="./src-data/deepseek-v4.graph.js?v=elk-layout"></script>
-    <script src="./app.js?v=elk-layout"></script>
+    <script src="./node_modules/d3/dist/d3.min.js?v=no-top"></script>
+    <script src="./node_modules/dagre/dist/dagre.min.js?v=no-top"></script>
+    <script src="./node_modules/elkjs/lib/elk.bundled.js?v=no-top"></script>
+    <script src="./src-data/deepseek-v4.graph.js?v=no-top"></script>
+    <script src="./app.js?v=no-top"></script>
   </body>
 </html>

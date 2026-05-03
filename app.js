@@ -64,15 +64,13 @@ function visibleEdges() {
 
 function render(fitAfterLayout = false) {
   shouldFitAfterLayout ||= fitAfterLayout;
-  renderStats();
-  renderLayerControls();
-  renderSceneHeader();
   ensureSelection();
   renderGraph();
   renderDetail();
 }
 
 function renderStats() {
+  if (!document.querySelector("#variantStats")) return;
   const m = model();
   document.querySelector("#variantStats").innerHTML = [
     ["model", m.label],
@@ -88,6 +86,7 @@ function renderStats() {
 }
 
 function renderLayerControls() {
+  if (!document.querySelector("#layerSlider")) return;
   const m = model();
   const maxLayer = m.schedule.length - 1;
   if (state.layer > maxLayer) state.layer = maxLayer;
@@ -108,6 +107,7 @@ function renderLayerControls() {
 }
 
 function renderSceneHeader() {
+  if (!document.querySelector("#sceneTitle")) return;
   document.querySelector("#sceneTitle").textContent = scene().title;
   document.querySelector("#sceneSubtitle").textContent = scene().subtitle;
   document.querySelector("#backScene").disabled = state.scene === "overview";
@@ -538,16 +538,16 @@ document.addEventListener("click", (event) => {
   }
 });
 
-document.querySelector("#layerSlider").addEventListener("input", (event) => {
+document.querySelector("#layerSlider")?.addEventListener("input", (event) => {
   state.layer = Number(event.target.value);
   render(true);
 });
 
-document.querySelector("#zoomIn").addEventListener("click", () => zoomBy(1.2));
-document.querySelector("#zoomOut").addEventListener("click", () => zoomBy(0.84));
-document.querySelector("#zoomFit").addEventListener("click", fitGraph);
-document.querySelector("#backScene").addEventListener("click", () => openScene("overview"));
-document.querySelector("#drillButton").addEventListener("click", (event) => {
+document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));
+document.querySelector("#zoomOut")?.addEventListener("click", () => zoomBy(0.84));
+document.querySelector("#zoomFit")?.addEventListener("click", fitGraph);
+document.querySelector("#backScene")?.addEventListener("click", () => openScene("overview"));
+document.querySelector("#drillButton")?.addEventListener("click", (event) => {
   if (event.currentTarget.dataset.scene) openScene(event.currentTarget.dataset.scene);
 });
 
