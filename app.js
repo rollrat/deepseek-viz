@@ -8,6 +8,7 @@ const state = {
   selected: "input-ids",
   detailOpen: true,
   showNodeFormula: true,
+  showHoverDetail: true,
 };
 
 const elk = new ELK();
@@ -19,6 +20,7 @@ let renderVersion = 0;
 let shouldFitAfterLayout = true;
 let minimapState = null;
 let measureHost = null;
+let hoveredNodeId = null;
 
 function model() {
   return DATA.models[state.model];
@@ -112,6 +114,8 @@ function renderModePicker() {
   document.querySelectorAll("[data-detail-select]").forEach((button) => {
     button.classList.toggle("active", button.dataset.detailSelect === state.graphDetail);
   });
+  const hoverToggle = document.querySelector("#hoverDetailToggle");
+  if (hoverToggle) hoverToggle.checked = state.showHoverDetail;
 }
 
 function renderStats() {
@@ -444,7 +448,7 @@ async function renderGraph() {
       (update) => update,
       (exit) => exit.remove(),
     )
-    .attr("class", (item) => `graph-group ${item.category}`);
+    .attr("class", (item) => `graph-group ${item.category} ${item.nodeIds?.includes(state.selected) ? "active" : ""}`);
 
   groupJoin
     .select("rect")
@@ -524,7 +528,7 @@ function renderMinimap(nodes, edges, groups) {
     .selectAll("rect")
     .data(groups, (item) => item.label)
     .join("rect")
-    .attr("class", "minimap-group")
+    .attr("class", (item) => `minimap-group ${item.nodeIds?.includes(state.selected) ? "active" : ""}`)
     .attr("x", (item) => x(item.x))
     .attr("y", (item) => y(item.y))
     .attr("width", (item) => Math.max(1, item.width * scale))
@@ -701,6 +705,7 @@ function groupBounds(group, nodeById) {
   return {
     label: group.label,
     category: group.category,
+    nodeIds: group.nodeIds,
     x: minX - padX,
     y: minY - padTop,
     width: maxX - minX + padX * 2,
@@ -734,17 +739,22 @@ function renderPanelState() {
 }
 
 function renderSelectionState() {
+  const selected = state.selected;
   d3.selectAll("path.edge").attr(
     "class",
-    (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${state.selected === item.from || state.selected === item.to ? "active" : ""}`,
+    (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${selected === item.from || selected === item.to ? "active" : ""}`,
   );
   d3.selectAll("g.edge-label").attr(
     "class",
-    (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${state.selected === item.from || state.selected === item.to ? "active" : ""}`,
+    (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${selected === item.from || selected === item.to ? "active" : ""}`,
+  );
+  d3.selectAll("g.graph-group").attr(
+    "class",
+    (item) => `graph-group ${item.category} ${item.nodeIds?.includes(selected) ? "active" : ""}`,
   );
   d3.selectAll("g.node").attr(
     "class",
-    (item) => `node ${item.doc.category} ${state.selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`,
+    (item) => `node ${item.doc.category} ${selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`,
   );
 }
 
@@ -783,6 +793,57 @@ function renderFormulaList(value) {
       return `<div class="formula-block">${title}<div class="formula">${renderLatex(resolve(formula.latex || ""))}</div>${note}</div>`;
     })
     .join("");
+}
+
+function renderHoverDetail(doc) {
+  const description = resolve(doc.details?.why || doc.summary || "");
+  const summary = description.length > 420 ? `${description.slice(0, 419)}...` : description;
+  return `
+    <div class="hover-detail-head">
+      <span>${escapeHtml(doc.category)}</span>
+      <strong>${escapeHtml(doc.title)}</strong>
+    </div>
+    <p>${escapeHtml(summary)}</p>
+    <div class="hover-detail-shapes">
+      <div><b>Input</b><code>${escapeHtml(resolve(doc.input))}</code></div>
+      <div><b>Output</b><code>${escapeHtml(resolve(doc.output))}</code></div>
+    </div>
+  `;
+}
+
+function showHoverDetail(nodeId, event) {
+  if (!state.showHoverDetail) return;
+  const doc = DATA.nodes[nodeId];
+  const tooltip = document.querySelector("#hoverDetail");
+  if (!doc || !tooltip) return;
+  if (hoveredNodeId !== nodeId) {
+    hoveredNodeId = nodeId;
+    tooltip.innerHTML = renderHoverDetail(doc);
+  }
+  tooltip.hidden = false;
+  positionHoverDetail(event);
+}
+
+function hideHoverDetail() {
+  hoveredNodeId = null;
+  const tooltip = document.querySelector("#hoverDetail");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function positionHoverDetail(event) {
+  const tooltip = document.querySelector("#hoverDetail");
+  if (!tooltip || tooltip.hidden) return;
+  const margin = 14;
+  const offset = 16;
+  const rect = tooltip.getBoundingClientRect();
+  let x = event.clientX + offset;
+  let y = event.clientY - rect.height - offset;
+  if (y < margin) y = event.clientY + offset;
+  if (x + rect.width + margin > window.innerWidth) x = event.clientX - rect.width - offset;
+  if (x + rect.width + margin > window.innerWidth) x = window.innerWidth - rect.width - margin;
+  if (y + rect.height + margin > window.innerHeight) y = window.innerHeight - rect.height - margin;
+  tooltip.style.left = `${Math.max(margin, x)}px`;
+  tooltip.style.top = `${Math.max(margin, y)}px`;
 }
 
 function renderLatex(source, options = {}) {
@@ -905,6 +966,37 @@ document.querySelector("#formulaToggle")?.addEventListener("change", (event) => 
   state.showNodeFormula = event.currentTarget.checked;
   shouldFitAfterLayout = true;
   render(true);
+});
+
+document.querySelector("#hoverDetailToggle")?.addEventListener("change", (event) => {
+  state.showHoverDetail = event.currentTarget.checked;
+  if (!state.showHoverDetail) hideHoverDetail();
+  renderModePicker();
+});
+
+document.addEventListener("pointerover", (event) => {
+  const graphNode = event.target.closest?.("[data-node]");
+  if (!graphNode) return;
+  showHoverDetail(graphNode.dataset.node, event);
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!state.showHoverDetail) return;
+  const graphNode = event.target.closest?.("[data-node]");
+  if (graphNode) {
+    showHoverDetail(graphNode.dataset.node, event);
+    return;
+  }
+  if (!hoveredNodeId) return;
+  positionHoverDetail(event);
+});
+
+document.addEventListener("pointerout", (event) => {
+  const graphNode = event.target.closest?.("[data-node]");
+  if (!graphNode) return;
+  const nextNode = event.relatedTarget?.closest?.("[data-node]");
+  if (nextNode === graphNode) return;
+  hideHoverDetail();
 });
 
 document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));

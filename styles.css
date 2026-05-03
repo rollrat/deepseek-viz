@@ -359,6 +359,75 @@ h1 {
   text-transform: none;
 }
 
+.hover-detail {
+  position: fixed;
+  z-index: 12;
+  width: min(360px, calc(100vw - 28px));
+  max-height: min(520px, calc(100vh - 28px));
+  overflow: auto;
+  padding: 13px 14px;
+  border: 1px solid rgba(78, 91, 94, 0.17);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.96);
+  box-shadow: 0 18px 42px rgba(27, 38, 41, 0.16);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+.hover-detail[hidden] {
+  display: none;
+}
+
+.hover-detail-head {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.hover-detail-head span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.hover-detail-head strong {
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.22;
+}
+
+.hover-detail p {
+  margin: 0;
+  color: #39474b;
+  font-size: 12.5px;
+  line-height: 1.48;
+}
+
+.hover-detail-shapes {
+  display: grid;
+  gap: 8px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(102, 113, 116, 0.12);
+}
+
+.hover-detail-shapes div {
+  display: grid;
+  gap: 3px;
+}
+
+.hover-detail-shapes b {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.hover-detail-shapes code {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
 #graph {
   display: block;
   width: 100%;
@@ -403,6 +472,10 @@ h1 {
   vector-effect: non-scaling-stroke;
 }
 
+.minimap-group.active {
+  stroke-width: 1.2;
+}
+
 .minimap-node {
   stroke-width: 0.7;
   vector-effect: non-scaling-stroke;
@@ -413,9 +486,20 @@ h1 {
   stroke: rgba(22, 118, 111, 0.54);
 }
 
+.minimap-group.stream.active {
+  fill: rgba(22, 118, 111, 0.09);
+  stroke: rgba(22, 118, 111, 0.52);
+}
+
 .minimap-node.attention,
 .minimap-node.cache {
   fill: rgba(52, 95, 159, 0.32);
+  stroke: rgba(52, 95, 159, 0.5);
+}
+
+.minimap-group.attention.active,
+.minimap-group.cache.active {
+  fill: rgba(52, 95, 159, 0.08);
   stroke: rgba(52, 95, 159, 0.5);
 }
 
@@ -425,14 +509,30 @@ h1 {
   stroke: rgba(168, 109, 23, 0.5);
 }
 
+.minimap-group.routing.active,
+.minimap-group.expert.active {
+  fill: rgba(168, 109, 23, 0.08);
+  stroke: rgba(168, 109, 23, 0.5);
+}
+
 .minimap-node.hc {
   fill: rgba(101, 86, 166, 0.32);
   stroke: rgba(101, 86, 166, 0.5);
 }
 
+.minimap-group.hc.active {
+  fill: rgba(101, 86, 166, 0.09);
+  stroke: rgba(101, 86, 166, 0.54);
+}
+
 .minimap-node.output {
   fill: rgba(75, 118, 55, 0.32);
   stroke: rgba(75, 118, 55, 0.5);
+}
+
+.minimap-group.output.active {
+  fill: rgba(75, 118, 55, 0.09);
+  stroke: rgba(75, 118, 55, 0.52);
 }
 
 #minimapViewport {
@@ -541,6 +641,55 @@ h1 {
 .graph-group.output rect {
   stroke: rgba(75, 118, 55, 0.23);
   fill: rgba(223, 235, 210, 0.1);
+}
+
+.graph-group.active rect {
+  stroke-width: 1.55;
+  filter: drop-shadow(0 8px 18px rgba(32, 40, 43, 0.08));
+}
+
+.graph-group.active text {
+  font-weight: 850;
+}
+
+.graph-group.hc.active rect {
+  stroke: rgba(101, 86, 166, 0.68);
+  fill: rgba(229, 222, 244, 0.21);
+}
+
+.graph-group.hc.active text {
+  fill: #6556a6;
+}
+
+.graph-group.attention.active rect,
+.graph-group.cache.active rect {
+  stroke: rgba(52, 95, 159, 0.62);
+  fill: rgba(223, 232, 247, 0.2);
+}
+
+.graph-group.attention.active text,
+.graph-group.cache.active text {
+  fill: #345f9f;
+}
+
+.graph-group.expert.active rect,
+.graph-group.routing.active rect {
+  stroke: rgba(168, 109, 23, 0.62);
+  fill: rgba(242, 223, 189, 0.2);
+}
+
+.graph-group.expert.active text,
+.graph-group.routing.active text {
+  fill: #9a671a;
+}
+
+.graph-group.output.active rect {
+  stroke: rgba(75, 118, 55, 0.62);
+  fill: rgba(223, 235, 210, 0.2);
+}
+
+.graph-group.output.active text {
+  fill: #4b7637;
 }
 
 @keyframes flow {

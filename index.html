@@ -35,6 +35,10 @@
               <input id="formulaToggle" type="checkbox" checked />
               <span>Node formulas</span>
             </label>
+            <label class="formula-inline" title="Show node details beside the cursor while hovering">
+              <input id="hoverDetailToggle" type="checkbox" checked />
+              <span>Hover details</span>
+            </label>
           </div>
           <svg id="graph" viewBox="0 0 1280 1280" role="img" aria-label="DeepSeek V4 top to bottom tensor graph">
             <defs>
@@ -66,6 +70,8 @@
             </svg>
           </div>
         </section>
+
+        <div id="hoverDetail" class="hover-detail" hidden></div>
 
         <aside class="info-panel" aria-label="selected node information">
           <header class="info-head">
