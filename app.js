@@ -176,7 +176,7 @@ function buildDagreLayout() {
   });
 
   visibleEdges().forEach((edge, index) => {
-    g.setEdge(edge.from, edge.to, { type: edge.type }, `${edge.from}-${edge.to}-${index}`);
+    g.setEdge(edge.from, edge.to, { type: edge.type, label: edge.label }, `${edge.from}-${edge.to}-${index}`);
   });
 
   dagre.layout(g);
@@ -233,6 +233,7 @@ async function buildElkOverviewLayout() {
       sources: [edge.from],
       targets: [edge.to],
       type: edge.type,
+      label: edge.label,
     })),
   };
 
@@ -258,6 +259,7 @@ async function buildElkOverviewLayout() {
       edge.id,
       {
         type: edge.type,
+        label: edge.label,
         points: edge.sections?.flatMap((section) => [
           section.startPoint,
           ...(section.bendPoints || []),

@@ -59,7 +59,7 @@ window.DSV4_GRAPH = (() => {
   };
 
   const nodes = {
-    "input-ids": n("input-ids", "Input IDs", "stream", "raw prompt", "[B,S]", "Tokenizer가 만든 token id matrix.", { vocab: "129280" }, ["B는 batch size, S는 현재 forward chunk length."], [sources.card, sources.proConfig, sources.flashConfig]),
+    "input-ids": n("input-ids", "Input IDs", "stream", "prompt_text [string]", "ids [B,S]", "Tokenizer가 만든 token id matrix.", { vocab: "129280" }, ["B는 batch size, S는 현재 forward chunk length."], [sources.card, sources.proConfig, sources.flashConfig]),
     embedding: n("embedding", "Token Embedding", "stream", "[B,S]", "[B,S,D]", "Token id를 dense hidden vector로 lookup한다.", { V: "129280", D: "$D" }, ["TP에서는 vocab shard 후 all-reduce."], common.src),
     "hc-expand": n("hc-expand", "HC Expand", "hc", "[B,S,D]", "[B,S,4,D]", "mHC residual lanes를 4개로 확장한다.", { hc_mult: 4 }, ["Block 사이 hidden state는 [B,S,4,D]."], common.src, "mhc"),
     "mhc-attn": n("mhc-attn", "mHC Pre/Post: Attention", "hc", "[B,S,4,D]", "[B,S,4,D]", "Attention sublayer 앞뒤의 controller/data path.", { mix_hc: 24, hc_dim: "4D" }, ["pre/post/comb를 생성하고 data path를 섞는다."], [sources.code, sources.kernel], "mhc"),
@@ -69,28 +69,28 @@ window.DSV4_GRAPH = (() => {
     "kv-cache": n("kv-cache", "KV Cache", "cache", "[B,S,512]", "[B,128+T/R,512]", "Window cache와 compressed cache를 하나의 buffer로 관리한다.", { window: 128, compressed: "max_seq_len/R" }, ["prefill과 decode write path가 다르다."], [sources.code], "compression"),
     compressor: n("compressor", "KV Compressor", "cache", "[B,S,D]", "[B,floor(S/R),512]", "wkv/wgate/ape/tail state로 compressed KV를 만든다.", { R: "$R", ape: "[R,Coff*512]" }, ["R=4는 overlap, R=128은 non-overlap."], [sources.code], "compression"),
     indexer: n("indexer", "Lightning Indexer", "attention", "x [B,S,D], qr [B,S,Qr]", "[B,S,topK]", "R=4 layer에서 compressed blocks top-k를 선택한다.", { index_heads: 64, index_dim: 128, topK: "$indexTopK" }, ["Hadamard rotation, FP4 quant, weighted ReLU score."], [sources.code], "indexer", { ratio: 4 }),
-    "sparse-attn": n("sparse-attn", "Sparse Attention", "attention", "q + selected KV", "[B,S,H,512]", "window ids와 compressed ids를 합쳐 attention을 계산한다.", { attn_sink: "[H]" }, ["output RoPE slice는 inverse RoPE."], [sources.code]),
+    "sparse-attn": n("sparse-attn", "Sparse Attention", "attention", "q [B,S,H,512], kv_selected [B,S,N,512]", "heads [B,S,H,512]", "window ids와 compressed ids를 합쳐 attention을 계산한다.", { attn_sink: "[H]" }, ["N은 선택된 KV entry 수이며 mode에 따라 <=128, 128+topK, 128+T/R로 달라진다."], [sources.code]),
     "o-proj": n("o-proj", "Grouped O Projection", "attention", "[B,S,H,512]", "[B,S,D]", "wo_a group low-rank projection 후 wo_b로 D차원 복원.", { groups: "$G", o_lora_rank: "$Or" }, ["각 group은 8 heads * 512 dims."], common.src),
     "mhc-ffn": n("mhc-ffn", "mHC Pre/Post: FFN", "hc", "[B,S,4,D]", "[B,S,4,D]", "MoE FFN 앞뒤의 mHC controller/data path.", { mix_hc: 24 }, ["Attention mHC와 별도 파라미터 세트."], [sources.code, sources.kernel], "mhc"),
     moe: n("moe", "MoE Router + Experts", "routing", "[B,S,D]", "[B,S,D]", "Gate가 top-6 experts를 고르고 routed/shared experts를 결합한다.", { E: "$E", K: 6, I: "$I" }, ["First 3 layers는 hash routing."], common.src, "moe"),
-    gate: n("gate", "Router Gate", "routing", "[B*S,D]", "ids/weights [B*S,6]", "sqrtsoftplus score, hash/top-k selection, weight normalize.", { route_scale: "$routeScale", scoring: "sqrtsoftplus" }, ["bias는 selection score에만 적용."], [sources.code], "moe"),
+    gate: n("gate", "Router Gate", "routing", "tokens [B*S,D]", "expert_ids [B*S,6], weights [B*S,6]", "sqrtsoftplus score, hash/top-k selection, weight normalize.", { route_scale: "$routeScale", scoring: "sqrtsoftplus" }, ["bias는 selection score에만 적용."], [sources.code], "moe"),
     "routed-experts": n("routed-experts", "Routed Experts", "expert", "[N_e,D]", "[N_e,D]", "선택된 expert별 FP4 SwiGLU FFN.", { w1: "D->I", w3: "D->I", w2: "I->D" }, ["silu(w1(x)) * w3(x) 후 w2."], [sources.code, sources.card], "moe"),
     "shared-expert": n("shared-expert", "Shared Expert", "expert", "[B*S,D]", "[B*S,D]", "모든 token에 항상 더해지는 shared SwiGLU expert.", { shared: 1, I: "$I" }, ["routed expert output에 더해진다."], [sources.code], "moe"),
-    "hc-post-moe": n("hc-post-moe", "MoE HC Writeback", "hc", "mixed residual, injected MoE", "[B,S,4,D]", "MoE residual lane mixing 결과와 MoE output injection을 합쳐 다음 block residual lanes를 만든다.", { output: "[B,S,4,D]" }, ["다음 block input이 된다."], [sources.code]),
+    "hc-post-moe": n("hc-post-moe", "MoE HC Writeback", "hc", "mixed_lanes [B,S,4,D], moe_inject [B,S,4,D]", "next_lanes [B,S,4,D]", "MoE residual lane mixing 결과와 MoE output injection을 합쳐 다음 block residual lanes를 만든다.", { output: "[B,S,4,D]" }, ["다음 block input이 된다."], [sources.code]),
     head: n("head", "HC Head + LM Head", "output", "[B,S,4,D]", "[B,V]", "hc_head collapse 후 last token vocab projection.", { V: 129280, D: "$D" }, ["공식 path는 x[:, -1]만 logits 계산."], common.src, "output"),
-    mtp: n("mtp", "MTP Block", "output", "hidden [B,S,4,D], ids [B,S]", "[B,V]", "추가 next-token prediction block.", { num_nextn: 1, R: 0 }, ["embedding path와 hidden path를 결합."], common.src, "output"),
+    mtp: n("mtp", "MTP Block", "output", "hidden [B,S,4,D], ids [B,S]", "mtp_logits [B,V]", "추가 next-token prediction block.", { num_nextn: 1, R: 0 }, ["embedding path와 hidden path를 결합."], common.src, "output"),
     logits: n("logits", "Logits", "output", "[B,D]", "[B,129280]", "마지막 token vocabulary scores.", { vocab: 129280 }, ["sampling은 이 그래프 범위 밖."], [sources.card, sources.code]),
 
     "hc-flatten": n("hc-flatten", "Flatten HC Lanes", "hc", "[B,S,4,D]", "[B,S,4D]", "controller path용으로 lane 축과 hidden 축을 flatten.", { hc_dim: "4D" }, [], [sources.code]),
     "hc-controller": n("hc-controller", "Controller Linear", "hc", "[B,S,4D]", "[B,S,24]", "hc_fn linear로 mHC controller logits를 생성한다.", { weight: "[24,4D]" }, ["rsqrt normalization factor를 곱한다."], [sources.code]),
-    "hc-sinkhorn": n("hc-sinkhorn", "Split + Sinkhorn", "hc", "mixes [B,S,24]", "pre, post, comb", "TileLang kernel이 pre/post/comb를 나누고 comb를 Sinkhorn normalize.", { iters: 20, eps: "1e-6" }, ["comb는 [B,S,4,4]."], [sources.kernel]),
+    "hc-sinkhorn": n("hc-sinkhorn", "Split + Sinkhorn", "hc", "mixes [B,S,24]", "pre [B,S,4], post [B,S,4], comb [B,S,4,4]", "TileLang kernel이 pre/post/comb를 나누고 comb를 Sinkhorn normalize.", { iters: 20, eps: "1e-6" }, ["comb는 [B,S,4,4]."], [sources.kernel]),
     "hc-read": n("hc-read", "Read Data Path", "hc", "pre [B,S,4], X [B,S,4,D]", "[B,S,D]", "pre 가중합으로 sublayer input을 만든다.", {}, ["sum(pre * X) over lane axis."], [sources.code]),
     "attn-residual-mix": n("attn-residual-mix", "Attention Residual Lane Mixing", "hc", "comb [B,S,4,4], residual [B,S,4,D]", "[B,S,4,D]", "comb matrix가 기존 4개 residual lane을 token별로 서로 섞는다.", { comb: "[B,S,4,4]", lanes: 4 }, ["이 노드가 attention writeback의 핵심 residual lane mixing이다."], [sources.code, sources.kernel]),
     "attn-post-inject": n("attn-post-inject", "Attention Output Injection", "hc", "post [B,S,4], y [B,S,D]", "[B,S,4,D]", "attention output을 post weights로 4개 lane에 주입한다.", { post: "[B,S,4]" }, ["residual lane mixing과 별도 항으로 더해진다."], [sources.code]),
-    "hc-write": n("hc-write", "Attention HC Writeback", "hc", "mixed residual, injected attention", "[B,S,4,D]", "comb * residual과 post * attention output을 합쳐 다음 residual lanes를 만든다.", {}, ["writeback = residual lane mixing + sublayer output injection."], [sources.code]),
+    "hc-write": n("hc-write", "Attention HC Writeback", "hc", "mixed_lanes [B,S,4,D], attn_inject [B,S,4,D]", "next_lanes [B,S,4,D]", "comb * residual과 post * attention output을 합쳐 다음 residual lanes를 만든다.", {}, ["writeback = residual lane mixing + sublayer output injection."], [sources.code]),
     "ffn-hc-flatten": n("ffn-hc-flatten", "FFN Flatten HC Lanes", "hc", "[B,S,4,D]", "[B,S,4D]", "MoE/FFN용 mHC controller 입력을 만들기 위해 residual lanes를 flatten한다.", { hc_dim: "4D" }, ["attention mHC와 별도의 controller path."], [sources.code]),
     "ffn-hc-controller": n("ffn-hc-controller", "FFN Controller Linear", "hc", "[B,S,4D]", "[B,S,24]", "MoE/FFN 앞뒤에서 쓸 pre/post/comb logits를 생성한다.", { weight: "[24,4D]", mix_hc: 24 }, ["attention mHC parameter set과 분리된다."], [sources.code]),
-    "ffn-hc-sinkhorn": n("ffn-hc-sinkhorn", "FFN Split + Sinkhorn", "hc", "mixes [B,S,24]", "pre, post, comb", "FFN용 pre/post/comb를 나누고 comb를 Sinkhorn normalize한다.", { comb: "[B,S,4,4]" }, ["여기서 MoE writeback residual lane mixing weights가 나온다."], [sources.kernel]),
+    "ffn-hc-sinkhorn": n("ffn-hc-sinkhorn", "FFN Split + Sinkhorn", "hc", "mixes [B,S,24]", "pre [B,S,4], post [B,S,4], comb [B,S,4,4]", "FFN용 pre/post/comb를 나누고 comb를 Sinkhorn normalize한다.", { comb: "[B,S,4,4]" }, ["여기서 MoE writeback residual lane mixing weights가 나온다."], [sources.kernel]),
     "hc-pre-moe": n("hc-pre-moe", "MoE Read Data Path", "hc", "pre [B,S,4], residual [B,S,4,D]", "[B,S,D]", "MoE FFN에 들어갈 hidden state를 mHC pre weights로 lane 축에서 읽는다.", { pre: "[B,S,4]" }, ["sum(pre * residual) over lane axis."], [sources.code, sources.kernel]),
     "ffn-residual-mix": n("ffn-residual-mix", "MoE Residual Lane Mixing", "hc", "comb [B,S,4,4], residual [B,S,4,D]", "[B,S,4,D]", "MoE writeback에서 기존 residual lanes를 comb matrix로 다시 섞는다.", { comb: "[B,S,4,4]", lanes: 4 }, ["attention writeback과 같은 residual lane mixing 구조지만 별도 mHC weights를 쓴다."], [sources.code, sources.kernel]),
     "ffn-post-inject": n("ffn-post-inject", "MoE Output Injection", "hc", "post [B,S,4], moe [B,S,D]", "[B,S,4,D]", "MoE output을 post weights로 4개 residual lane에 주입한다.", { post: "[B,S,4]" }, [], [sources.code]),
@@ -103,33 +103,33 @@ window.DSV4_GRAPH = (() => {
     "kv-wkv": n("kv-wkv", "wkv", "attention", "[B,S,D]", "[B,S,512]", "Shared KV projection.", { kv_heads: 1 }, [], [sources.code]),
     "kv-norm": n("kv-norm", "kv_norm", "attention", "[B,S,512]", "[B,S,512]", "KV RMSNorm.", {}, [], [sources.code]),
     "kv-rope-quant": n("kv-rope-quant", "KV RoPE + FP8 Sim", "attention", "[B,S,512]", "[B,S,512]", "RoPE dims는 BF16, non-RoPE dims는 FP8 simulation.", { rope: 64, nope: 448 }, [], [sources.code, sources.kernel]),
-    "window-topk": n("window-topk", "Window TopK IDs", "cache", "start_pos, S", "[B,S,<=128]", "최근 128 token window indices.", { window: 128 }, [], [sources.code]),
-    "attn-selected": n("attn-selected", "Selected KV IDs", "attention", "window ids + compressed ids", "topk_idxs int", "sparse attention이 읽을 KV positions.", {}, [], [sources.code]),
+    "window-topk": n("window-topk", "Window TopK IDs", "cache", "start_pos [scalar], query_len [S]", "window_ids [B,S,W<=128]", "최근 128 token window indices.", { window: 128 }, [], [sources.code]),
+    "attn-selected": n("attn-selected", "Selected KV IDs", "attention", "window_ids [B,S,W], compressed_ids [B,S,C]", "selected_ids [B,S,W+C]", "sparse attention이 읽을 KV positions.", {}, [], [sources.code]),
 
     "comp-wkv": n("comp-wkv", "Compressor wkv", "cache", "[B,S,D]", "[B,S,Coff*512]", "Compression candidate KV projection.", { Coff: "1 or 2" }, [], [sources.code]),
     "comp-wgate": n("comp-wgate", "Compressor wgate", "cache", "[B,S,D]", "[B,S,Coff*512]", "Softmax pooling score projection.", { ape: "[R,Coff*512]" }, [], [sources.code]),
-    "tail-state": n("tail-state", "Compressed Tail State", "cache", "remainder tokens", "kv_state / score_state", "아직 R개가 안 찬 tail tokens를 buffer에 보관한다.", { kv_state: "[B,Coff*R,Coff*512]", score_state: "same" }, [], [sources.code]),
+    "tail-state": n("tail-state", "Compressed Tail State", "cache", "kv_tail [B,T_tail,Coff,512], score_tail [B,T_tail,Coff,512]", "kv_state [B,Coff*R,Coff*512], score_state [B,Coff*R,Coff*512]", "아직 R개가 안 찬 tail tokens를 buffer에 보관한다.", { T_tail: "< R", kv_state: "[B,Coff*R,Coff*512]", score_state: "[B,Coff*R,Coff*512]" }, [], [sources.code]),
     "overlap-transform": n("overlap-transform", "Overlap Transform", "cache", "[B,blocks,R,2*512]", "[B,blocks,2R,512]", "R=4에서 이전 chunk와 현재 chunk를 겹쳐 pooling.", { active: "R=4 only" }, [], [sources.code]),
-    "gated-pool": n("gated-pool", "Softmax-Gated Pool", "cache", "kv, score+ape", "[B,blocks,512]", "R tokens를 softmax(score)로 가중합.", {}, [], [sources.code]),
+    "gated-pool": n("gated-pool", "Softmax-Gated Pool", "cache", "kv_block [B,blocks,R,512], gate_block [B,blocks,R,512]", "compressed_kv [B,blocks,512]", "R tokens를 softmax(score)로 가중합.", {}, [], [sources.code]),
     "comp-norm-rope": n("comp-norm-rope", "Norm + Compressed RoPE", "cache", "[B,blocks,512]", "[B,blocks,512]", "compressed KV norm 후 compressed position RoPE.", { theta: 160000 }, [], [sources.code]),
-    "comp-cache-write": n("comp-cache-write", "Compressed Cache Write", "cache", "[B,blocks,512]", "kv_cache[:,128:]", "window 영역 뒤 compressed cache에 저장.", {}, [], [sources.code]),
+    "comp-cache-write": n("comp-cache-write", "Compressed Cache Write", "cache", "compressed_kv [B,blocks,512]", "kv_cache_compressed [B,T/R,512]", "window 영역 뒤 compressed cache에 저장.", {}, [], [sources.code]),
 
     "idx-q": n("idx-q", "Indexer Q", "attention", "qr [B,S,Qr]", "[B,S,64,128]", "indexer wq_b projection.", { heads: 64, dim: 128 }, [], [sources.code]),
     "idx-rotate": n("idx-rotate", "RoPE + Hadamard + FP4", "attention", "[B,S,64,128]", "[B,S,64,128]", "index query rotation and FP4 activation quant.", {}, [], [sources.code, sources.kernel]),
     "idx-cache": n("idx-cache", "Index KV Cache", "cache", "x [B,S,D]", "[B,T/4,128]", "indexer 전용 compressor cache.", { R: 4, dim: 128 }, [], [sources.code]),
-    "idx-einsum": n("idx-einsum", "Lightning Scores", "attention", "q, index KV", "[B,S,64,T/4]", "ReLU dot product scores.", {}, [], [sources.code]),
-    "idx-weight": n("idx-weight", "weights_proj + Head Sum", "attention", "scores, weights [B,S,64]", "[B,S,T/4]", "head별 score를 weighted sum.", {}, [], [sources.code]),
+    "idx-einsum": n("idx-einsum", "Lightning Scores", "attention", "idx_q [B,S,64,128], idx_cache [B,T/4,128]", "scores [B,S,64,T/4]", "ReLU dot product scores.", {}, [], [sources.code]),
+    "idx-weight": n("idx-weight", "weights_proj + Head Sum", "attention", "scores [B,S,64,T/4], weights [B,S,64]", "block_scores [B,S,T/4]", "head별 score를 weighted sum.", {}, [], [sources.code]),
     "idx-topk": n("idx-topk", "TopK + Offset", "attention", "[B,S,T/4]", "[B,S,topK]", "causal mask 후 top-k compressed block ids.", { topK: "$indexTopK" }, [], [sources.code]),
 
     "gate-score": n("gate-score", "Gate Scores", "routing", "[B*S,D]", "[B*S,E]", "linear + sqrtsoftplus expert scores.", { E: "$E" }, [], [sources.code]),
-    "hash-route": n("hash-route", "Hash Route", "routing", "input_ids", "[B*S,6]", "first 3 layers use tid2eid lookup.", { layers: 3 }, [], [sources.code]),
-    "topk-route": n("topk-route", "TopK Route", "routing", "scores + bias", "[B*S,6]", "later layers choose top-6 experts.", {}, [], [sources.code]),
-    "route-weights": n("route-weights", "Normalize Weights", "routing", "selected scores", "[B*S,6]", "gather original scores, normalize, apply route scale.", { scale: "$routeScale" }, [], [sources.code]),
-    "expert-dispatch": n("expert-dispatch", "Expert Dispatch", "expert", "ids, weights", "per-expert token batches", "torch.where(indices == expert_id)로 token dispatch.", {}, [], [sources.code]),
+    "hash-route": n("hash-route", "Hash Route", "routing", "input_ids_flat [B*S]", "expert_ids [B*S,6]", "first 3 layers use tid2eid lookup.", { layers: 3 }, [], [sources.code]),
+    "topk-route": n("topk-route", "TopK Route", "routing", "scores [B*S,E], bias [E]", "expert_ids [B*S,6]", "later layers choose top-6 experts.", {}, [], [sources.code]),
+    "route-weights": n("route-weights", "Normalize Weights", "routing", "selected_scores [B*S,6]", "route_weights [B*S,6]", "gather original scores, normalize, apply route scale.", { scale: "$routeScale" }, [], [sources.code]),
+    "expert-dispatch": n("expert-dispatch", "Expert Dispatch", "expert", "tokens [B*S,D], expert_ids [B*S,6], weights [B*S,6]", "expert_batches [N_e,D]", "torch.where(indices == expert_id)로 token dispatch.", {}, [], [sources.code]),
     "expert-w1w3": n("expert-w1w3", "w1 / w3", "expert", "[N_e,D]", "gate/up [N_e,I]", "SwiGLU의 gate와 up projection.", { I: "$I" }, [], [sources.code]),
-    swiglu: n("swiglu", "SwiGLU + Clamp", "expert", "gate, up", "[N_e,I]", "clamp 후 silu(gate) * up.", { limit: 10.0 }, [], [sources.code]),
+    swiglu: n("swiglu", "SwiGLU + Clamp", "expert", "gate [N_e,I], up [N_e,I]", "activation [N_e,I]", "clamp 후 silu(gate) * up.", { limit: 10.0 }, [], [sources.code]),
     "expert-w2": n("expert-w2", "w2 Down Projection", "expert", "[N_e,I]", "[N_e,D]", "expert output projection.", {}, [], [sources.code]),
-    "expert-combine": n("expert-combine", "Routed + Shared Combine", "expert", "routed y, shared y", "[B*S,D]", "routed outputs accumulate, shared expert added.", {}, [], [sources.code]),
+    "expert-combine": n("expert-combine", "Routed + Shared Combine", "expert", "routed_y [B*S,D], shared_y [B*S,D]", "moe_y [B*S,D]", "routed outputs accumulate, shared expert added.", {}, [], [sources.code]),
   };
 
   Object.assign(nodes["window-topk"], {
@@ -138,8 +138,8 @@ window.DSV4_GRAPH = (() => {
   });
   Object.assign(nodes["attn-selected"], {
     title: "Attention KV Set",
-    input: "SWA ids + active compressed ids",
-    output: "selected KV positions",
+    input: "window_ids [B,S,W], compressed_ids [B,S,C]",
+    output: "selected_ids [B,S,W+C]",
     summary: "The final KV set merges the local SWA window with the active compressed path: CSA top-k blocks, HCA all compressed blocks, or no compressed blocks for MTP.",
   });
   Object.assign(nodes["sparse-attn"], {
@@ -158,8 +158,8 @@ window.DSV4_GRAPH = (() => {
     "stack-entry",
     "Decoder Stack Entry",
     "stream",
-    "[B,S,4,D]",
-    "repeated decoder state",
+    "initial_lanes [B,S,4,D]",
+    "layer_state [B,S,4,D]",
     "The expanded graph below is one representative decoder layer selected by the layer-mode control; this is not a second input stream inside every layer.",
     { decoder_layers: "$layers" },
     ["Input and embedding are outside the repeated decoder block."],
@@ -169,8 +169,8 @@ window.DSV4_GRAPH = (() => {
     "stack-exit",
     "Final Stack State",
     "output",
-    "after decoder layer 60",
-    "[B,S,4,D]",
+    "layer_state_after_L [B,S,4,D]",
+    "final_lanes [B,S,4,D]",
     "Only after the decoder stack finishes does the graph branch to HC head / LM head and MTP.",
     { lm_head: "final token only" },
     ["The official path computes logits from x[:, -1], not from every layer."],
@@ -407,15 +407,15 @@ window.DSV4_GRAPH = (() => {
       "stack-exit", "head", "mtp", "logits",
     ], [
       e("input-ids", "embedding"), e("embedding", "hc-expand"),
-      e("hc-expand", "stack-entry"), e("stack-entry", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"),
+      e("hc-expand", "stack-entry"), e("stack-entry", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read", "main", null, "pre [B,S,4]"),
       e("hc-read", "q-wqa"), e("q-wqa", "q-norm"), e("q-norm", "q-wqb"), e("q-wqb", "q-reshape"), e("q-reshape", "q-rope"),
       e("hc-read", "kv-wkv", "branch"), e("kv-wkv", "kv-norm"), e("kv-norm", "kv-rope-quant"), e("kv-rope-quant", "window-topk", "branch"),
-      e("kv-rope-quant", "comp-wkv", "branch"), e("kv-rope-quant", "comp-wgate", "branch"), e("comp-wkv", "tail-state"), e("comp-wgate", "tail-state"), e("tail-state", "overlap-transform", "branch", { mode: "csa" }), e("overlap-transform", "gated-pool", "branch", { mode: "csa" }), e("tail-state", "gated-pool", "branch", { mode: "hca" }), e("comp-wgate", "gated-pool", "branch"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"),
+      e("kv-rope-quant", "comp-wkv", "branch"), e("kv-rope-quant", "comp-wgate", "branch"), e("comp-wkv", "tail-state", "main", null, "kv_tail [B,S,Coff*512]"), e("comp-wgate", "tail-state", "main", null, "score_tail [B,S,Coff*512]"), e("tail-state", "overlap-transform", "branch", { mode: "csa" }, "kv_state [B,Coff*R,Coff*512]"), e("overlap-transform", "gated-pool", "branch", { mode: "csa" }), e("tail-state", "gated-pool", "branch", { mode: "hca" }, "kv_state [B,Coff*R,Coff*512]"), e("comp-wgate", "gated-pool", "branch", null, "gate_block [B,blocks,R,512]"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"),
       e("q-norm", "idx-q", "branch", { mode: "csa" }), e("idx-q", "idx-rotate"), e("kv-rope-quant", "idx-cache", "branch", { mode: "csa" }), e("idx-rotate", "idx-einsum"), e("idx-cache", "idx-einsum"), e("idx-einsum", "idx-weight"), e("idx-weight", "idx-topk"),
       e("window-topk", "attn-selected"), e("comp-cache-write", "hca-all-compressed", "branch", { mode: "hca" }), e("hca-all-compressed", "attn-selected", "branch", { mode: "hca" }), e("idx-topk", "attn-selected", "branch", { mode: "csa" }), e("q-rope", "sparse-attn"), e("attn-selected", "sparse-attn"), e("sparse-attn", "o-proj"),
-      e("hc-sinkhorn", "attn-residual-mix", "branch"), e("hc-expand", "attn-residual-mix", "branch"), e("o-proj", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch"), e("attn-residual-mix", "hc-write"), e("attn-post-inject", "hc-write"),
-      e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe"), e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch"),
-      e("hc-pre-moe", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights"), e("topk-route", "route-weights"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu"), e("swiglu", "expert-w2"), e("hc-pre-moe", "shared-expert", "branch"), e("expert-w2", "expert-combine"), e("shared-expert", "expert-combine"), e("expert-combine", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch"), e("ffn-residual-mix", "hc-post-moe"), e("ffn-post-inject", "hc-post-moe"),
+      e("hc-sinkhorn", "attn-residual-mix", "branch", null, "comb [B,S,4,4]"), e("hc-expand", "attn-residual-mix", "branch"), e("o-proj", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch", null, "post [B,S,4]"), e("attn-residual-mix", "hc-write", "main", null, "mixed_lanes [B,S,4,D]"), e("attn-post-inject", "hc-write", "main", null, "attn_inject [B,S,4,D]"),
+      e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe", "main", null, "pre [B,S,4]"), e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch", null, "comb [B,S,4,4]"),
+      e("hc-pre-moe", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights", "main", null, "expert_ids [B*S,6]"), e("topk-route", "route-weights", "main", null, "expert_ids [B*S,6]"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu", "main", null, "gate [N_e,I], up [N_e,I]"), e("swiglu", "expert-w2"), e("hc-pre-moe", "shared-expert", "branch"), e("expert-w2", "expert-combine", "main", null, "routed_y [B*S,D]"), e("shared-expert", "expert-combine", "main", null, "shared_y [B*S,D]"), e("expert-combine", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch", null, "post [B,S,4]"), e("ffn-residual-mix", "hc-post-moe", "main", null, "mixed_lanes [B,S,4,D]"), e("ffn-post-inject", "hc-post-moe", "main", null, "moe_inject [B,S,4,D]"),
       e("hc-post-moe", "stack-exit"), e("stack-exit", "head"), e("stack-exit", "mtp", "branch"), e("head", "logits"),
     ], [
       group("Model entry (once)", ["input-ids", "embedding", "hc-expand", "stack-entry"], "stream"),
@@ -436,10 +436,10 @@ window.DSV4_GRAPH = (() => {
       "ffn-hc-flatten", "ffn-hc-controller", "ffn-hc-sinkhorn", "hc-pre-moe",
       "moe", "ffn-residual-mix", "ffn-post-inject", "hc-post-moe",
     ], [
-      e("hc-expand", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read"), e("hc-read", "attention"),
-      e("hc-sinkhorn", "attn-residual-mix", "branch"), e("hc-expand", "attn-residual-mix", "branch"), e("attention", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch"), e("attn-residual-mix", "hc-write"), e("attn-post-inject", "hc-write"),
-      e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe"), e("hc-pre-moe", "moe"),
-      e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch"), e("moe", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch"), e("ffn-residual-mix", "hc-post-moe"), e("ffn-post-inject", "hc-post-moe"),
+      e("hc-expand", "hc-flatten"), e("hc-flatten", "hc-controller"), e("hc-controller", "hc-sinkhorn"), e("hc-sinkhorn", "hc-read", "main", null, "pre [B,S,4]"), e("hc-read", "attention"),
+      e("hc-sinkhorn", "attn-residual-mix", "branch", null, "comb [B,S,4,4]"), e("hc-expand", "attn-residual-mix", "branch"), e("attention", "attn-post-inject"), e("hc-sinkhorn", "attn-post-inject", "branch", null, "post [B,S,4]"), e("attn-residual-mix", "hc-write", "main", null, "mixed_lanes [B,S,4,D]"), e("attn-post-inject", "hc-write", "main", null, "attn_inject [B,S,4,D]"),
+      e("hc-write", "ffn-hc-flatten"), e("ffn-hc-flatten", "ffn-hc-controller"), e("ffn-hc-controller", "ffn-hc-sinkhorn"), e("ffn-hc-sinkhorn", "hc-pre-moe", "main", null, "pre [B,S,4]"), e("hc-pre-moe", "moe"),
+      e("hc-write", "ffn-residual-mix", "branch"), e("ffn-hc-sinkhorn", "ffn-residual-mix", "branch", null, "comb [B,S,4,4]"), e("moe", "ffn-post-inject"), e("ffn-hc-sinkhorn", "ffn-post-inject", "branch", null, "post [B,S,4]"), e("ffn-residual-mix", "hc-post-moe", "main", null, "mixed_lanes [B,S,4,D]"), e("ffn-post-inject", "hc-post-moe", "main", null, "moe_inject [B,S,4,D]"),
     ], [
       group("mHC attention controller + read path", ["hc-flatten", "hc-controller", "hc-sinkhorn", "hc-read"], "hc"),
       group("mHC attention residual mixing", ["attn-residual-mix", "attn-post-inject", "hc-write"], "hc"),
@@ -460,7 +460,7 @@ window.DSV4_GRAPH = (() => {
     compression: scene("compression", "KV cache and compressor", "Window cache, compressed cache, tail state, overlap pooling, and cache writes.", [
       "kv-path", "kv-cache", "window-topk", "comp-wkv", "comp-wgate", "tail-state", "overlap-transform", "gated-pool", "comp-norm-rope", "comp-cache-write", "sparse-attn",
     ], [
-      e("kv-path", "kv-cache"), e("kv-cache", "window-topk"), e("kv-path", "comp-wkv", "branch"), e("kv-path", "comp-wgate", "branch"), e("comp-wkv", "tail-state"), e("comp-wgate", "tail-state"), e("tail-state", "overlap-transform"), e("overlap-transform", "gated-pool"), e("comp-wgate", "gated-pool", "branch"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"), e("comp-cache-write", "sparse-attn"),
+      e("kv-path", "kv-cache"), e("kv-cache", "window-topk"), e("kv-path", "comp-wkv", "branch"), e("kv-path", "comp-wgate", "branch"), e("comp-wkv", "tail-state", "main", null, "kv_tail [B,S,Coff*512]"), e("comp-wgate", "tail-state", "main", null, "score_tail [B,S,Coff*512]"), e("tail-state", "overlap-transform", "main", null, "kv_state [B,Coff*R,Coff*512]"), e("overlap-transform", "gated-pool"), e("comp-wgate", "gated-pool", "branch", null, "gate_block [B,blocks,R,512]"), e("gated-pool", "comp-norm-rope"), e("comp-norm-rope", "comp-cache-write"), e("comp-cache-write", "sparse-attn"),
     ], [
       group("SWA window cache", ["kv-path", "kv-cache", "window-topk"], "cache"),
       group("Compressor projections", ["comp-wkv", "comp-wgate"], "cache"),
@@ -481,7 +481,7 @@ window.DSV4_GRAPH = (() => {
     moe: scene("moe", "MoE and SwiGLU experts", "Routing, expert dispatch, FP4 SwiGLU experts, shared expert, and combine.", [
       "mhc-ffn", "gate-score", "hash-route", "topk-route", "route-weights", "expert-dispatch", "expert-w1w3", "swiglu", "expert-w2", "shared-expert", "expert-combine", "hc-post-moe",
     ], [
-      e("mhc-ffn", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights"), e("topk-route", "route-weights"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu"), e("swiglu", "expert-w2"), e("mhc-ffn", "shared-expert", "branch"), e("expert-w2", "expert-combine"), e("shared-expert", "expert-combine"), e("expert-combine", "hc-post-moe"),
+      e("mhc-ffn", "gate-score"), e("gate-score", "hash-route", "branch"), e("gate-score", "topk-route", "branch"), e("hash-route", "route-weights", "main", null, "expert_ids [B*S,6]"), e("topk-route", "route-weights", "main", null, "expert_ids [B*S,6]"), e("route-weights", "expert-dispatch"), e("expert-dispatch", "expert-w1w3"), e("expert-w1w3", "swiglu", "main", null, "gate [N_e,I], up [N_e,I]"), e("swiglu", "expert-w2"), e("mhc-ffn", "shared-expert", "branch"), e("expert-w2", "expert-combine", "main", null, "routed_y [B*S,D]"), e("shared-expert", "expert-combine", "main", null, "shared_y [B*S,D]"), e("expert-combine", "hc-post-moe"),
     ], [
       group("mHC MoE entry/exit", ["mhc-ffn", "hc-post-moe"], "hc"),
       group("Router scores + ids", ["gate-score", "hash-route", "topk-route", "route-weights"], "routing"),
@@ -504,8 +504,8 @@ window.DSV4_GRAPH = (() => {
     return { id, title, category, input, output, summary, params, notes, sources, drill, visibleWhen };
   }
 
-  function e(from, to, type = "main", visibleWhen = null) {
-    return { from, to, type, visibleWhen };
+  function e(from, to, type = "main", visibleWhen = null, label = null) {
+    return { from, to, type, visibleWhen, label };
   }
 
   function scene(id, title, subtitle, nodeIds, edges, groups = []) {
