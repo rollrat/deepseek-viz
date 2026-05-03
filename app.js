@@ -8,6 +8,7 @@ const state = {
   selected: "input-ids",
   selectedGroup: null,
   detailOpen: true,
+  detailPanelPosition: null,
   showNodeFormula: true,
   embedNodeDescription: false,
 };
@@ -21,6 +22,7 @@ let renderVersion = 0;
 let shouldFitAfterLayout = true;
 let minimapState = null;
 let measureHost = null;
+let detailPanelDrag = null;
 
 function model() {
   return DATA.models[state.model];
@@ -982,7 +984,82 @@ function collectSources(docs) {
 }
 
 function renderPanelState() {
-  document.querySelector(".info-panel")?.classList.toggle("closed", !state.detailOpen);
+  const panel = document.querySelector(".info-panel");
+  if (!panel) return;
+  panel.classList.toggle("closed", !state.detailOpen);
+  if (state.detailOpen) requestAnimationFrame(applyDetailPanelPosition);
+}
+
+function detailPanelParent(panel) {
+  return panel.offsetParent || document.querySelector(".graph-shell") || document.documentElement;
+}
+
+function detailPanelCurrentPosition(panel) {
+  const parentRect = detailPanelParent(panel).getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  return {
+    x: panelRect.left - parentRect.left,
+    y: panelRect.top - parentRect.top,
+  };
+}
+
+function constrainDetailPanelPosition(panel, position) {
+  const parent = detailPanelParent(panel);
+  const margin = 10;
+  const maxX = Math.max(margin, parent.clientWidth - panel.offsetWidth - margin);
+  const maxY = Math.max(margin, parent.clientHeight - panel.offsetHeight - margin);
+  return {
+    x: Math.min(Math.max(position.x, margin), maxX),
+    y: Math.min(Math.max(position.y, margin), maxY),
+  };
+}
+
+function applyDetailPanelPosition() {
+  const panel = document.querySelector(".info-panel");
+  if (!panel || !state.detailPanelPosition || !state.detailOpen) return;
+  state.detailPanelPosition = constrainDetailPanelPosition(panel, state.detailPanelPosition);
+  panel.style.left = `${state.detailPanelPosition.x}px`;
+  panel.style.top = `${state.detailPanelPosition.y}px`;
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
+}
+
+function beginDetailPanelDrag(event) {
+  if (event.button !== 0 || event.target.closest("button, a, input, textarea, select")) return;
+  const panel = event.currentTarget.closest(".info-panel");
+  if (!panel) return;
+  const startPosition = constrainDetailPanelPosition(panel, state.detailPanelPosition || detailPanelCurrentPosition(panel));
+  state.detailPanelPosition = startPosition;
+  applyDetailPanelPosition();
+
+  detailPanelDrag = {
+    pointerId: event.pointerId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: startPosition.x,
+    startY: startPosition.y,
+  };
+  panel.classList.add("dragging");
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function moveDetailPanelDrag(event) {
+  if (!detailPanelDrag || event.pointerId !== detailPanelDrag.pointerId) return;
+  const panel = document.querySelector(".info-panel");
+  if (!panel) return;
+  state.detailPanelPosition = constrainDetailPanelPosition(panel, {
+    x: detailPanelDrag.startX + event.clientX - detailPanelDrag.startClientX,
+    y: detailPanelDrag.startY + event.clientY - detailPanelDrag.startClientY,
+  });
+  applyDetailPanelPosition();
+}
+
+function endDetailPanelDrag(event) {
+  if (!detailPanelDrag || event.pointerId !== detailPanelDrag.pointerId) return;
+  document.querySelector(".info-panel")?.classList.remove("dragging");
+  event.currentTarget.releasePointerCapture?.(event.pointerId);
+  detailPanelDrag = null;
 }
 
 function renderSelectionState() {
@@ -1220,6 +1297,10 @@ document.querySelector("#embedDescToggle")?.addEventListener("change", (event) =
 document.querySelector("#zoomIn")?.addEventListener("click", () => zoomBy(1.2));
 document.querySelector("#zoomOut")?.addEventListener("click", () => zoomBy(0.84));
 document.querySelector("#zoomFit")?.addEventListener("click", fitGraph);
+document.querySelector(".info-head")?.addEventListener("pointerdown", beginDetailPanelDrag);
+document.querySelector(".info-head")?.addEventListener("pointermove", moveDetailPanelDrag);
+document.querySelector(".info-head")?.addEventListener("pointerup", endDetailPanelDrag);
+document.querySelector(".info-head")?.addEventListener("pointercancel", endDetailPanelDrag);
 document.querySelector("#closeDetail")?.addEventListener("click", () => {
   state.detailOpen = false;
   renderPanelState();
@@ -1228,6 +1309,7 @@ document.querySelector("#backScene")?.addEventListener("click", () => openScene(
 document.querySelector("#drillButton")?.addEventListener("click", (event) => {
   if (event.currentTarget.dataset.scene) openScene(event.currentTarget.dataset.scene);
 });
+window.addEventListener("resize", applyDetailPanelPosition);
 
 render(true);
 document.fonts?.ready.then(() => render(true));

@@ -813,6 +813,10 @@ h1 {
   backdrop-filter: blur(18px);
 }
 
+.info-panel.dragging {
+  user-select: none;
+}
+
 .info-panel.closed {
   display: none;
 }
@@ -824,6 +828,12 @@ h1 {
   align-items: start;
   padding: 16px 16px 13px;
   border-bottom: 1px solid rgba(102, 113, 116, 0.14);
+  cursor: grab;
+  touch-action: none;
+}
+
+.info-panel.dragging .info-head {
+  cursor: grabbing;
 }
 
 .close-detail {
