@@ -9,6 +9,7 @@ const state = {
   detailOpen: true,
   showNodeFormula: true,
   showHoverDetail: true,
+  embedNodeDescription: false,
 };
 
 const elk = new ELK();
@@ -116,6 +117,8 @@ function renderModePicker() {
   });
   const hoverToggle = document.querySelector("#hoverDetailToggle");
   if (hoverToggle) hoverToggle.checked = state.showHoverDetail;
+  const descToggle = document.querySelector("#embedDescToggle");
+  if (descToggle) descToggle.checked = state.embedNodeDescription;
 }
 
 function renderStats() {
@@ -334,9 +337,11 @@ function nodeWidth(doc) {
   const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
   const detailBoost = doc.details ? 12 : 0;
   const formulaBoost = state.showNodeFormula ? 54 : 0;
-  const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost + formulaBoost;
-  const min = state.showNodeFormula ? 286 : state.scene === "overview" ? 198 : 228;
-  const max = state.showNodeFormula ? 420 : state.scene === "overview" ? 286 : state.scene === "moe" ? 342 : 326;
+  const descLen = state.embedNodeDescription ? String(resolve(doc.details?.why || doc.summary || "")).length : 0;
+  const descBoost = state.embedNodeDescription ? Math.min(190, 72 + descLen * 0.18) : 0;
+  const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost + formulaBoost + descBoost;
+  const min = state.embedNodeDescription ? 430 : state.showNodeFormula ? 286 : state.scene === "overview" ? 198 : 228;
+  const max = state.embedNodeDescription ? 640 : state.showNodeFormula ? 420 : state.scene === "overview" ? 286 : state.scene === "moe" ? 342 : 326;
   return Math.round(Math.max(min, Math.min(max, raw)));
 }
 
@@ -662,14 +667,23 @@ function nodeHtml(item) {
   const input = truncate(resolve(item.doc.input), state.scene === "overview" ? 34 : 46);
   const output = truncate(resolve(item.doc.output), state.scene === "overview" ? 34 : 46);
   const formula = state.showNodeFormula ? nodeFormulaHtml(item.doc) : "";
+  const description = state.embedNodeDescription ? nodeDescriptionHtml(item.doc) : "";
   return `
     <div class="node-title-row">
       <span>${escapeHtml(item.doc.category)}</span>
       <strong>${escapeHtml(item.doc.title)}</strong>
     </div>
     ${formula}
+    ${description}
     <div class="node-shape">${escapeHtml(input)} -> ${escapeHtml(output)}</div>
   `;
+}
+
+function nodeDescriptionHtml(doc) {
+  const source = resolve(doc.details?.why || doc.summary || "");
+  if (!source) return "";
+  const text = String(source).replace(/\s+/g, " ").trim();
+  return `<p class="node-description">${escapeHtml(text)}</p>`;
 }
 
 function nodeFormulaHtml(doc) {
@@ -972,6 +986,12 @@ document.querySelector("#hoverDetailToggle")?.addEventListener("change", (event)
   state.showHoverDetail = event.currentTarget.checked;
   if (!state.showHoverDetail) hideHoverDetail();
   renderModePicker();
+});
+
+document.querySelector("#embedDescToggle")?.addEventListener("change", (event) => {
+  state.embedNodeDescription = event.currentTarget.checked;
+  shouldFitAfterLayout = true;
+  render(true);
 });
 
 document.addEventListener("pointerover", (event) => {
