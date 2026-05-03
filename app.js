@@ -6,7 +6,7 @@ const state = {
   scene: "overview",
   selected: "input-ids",
   detailOpen: true,
-  showNodeFormula: false,
+  showNodeFormula: true,
 };
 
 const elk = new ELK();
@@ -661,7 +661,14 @@ function nodeFormulaHtml(doc) {
   const formula = firstFormula(doc.details?.formula);
   if (!formula?.latex) return "";
   const title = formula.title ? `<b>${escapeHtml(resolve(formula.title))}</b>` : "";
-  return `<div class="node-formula">${title}${renderLatex(resolve(formula.latex), { displayMode: false })}</div>`;
+  return `<div class="node-formula">${title}${renderLatex(compactLatex(resolve(formula.latex)), { displayMode: false })}</div>`;
+}
+
+function compactLatex(source) {
+  return String(source)
+    .replaceAll(String.raw`\qquad`, String.raw`\,`)
+    .replaceAll(String.raw`\quad`, String.raw`\,`)
+    .replaceAll(String.raw`\;`, String.raw`\,`);
 }
 
 function firstFormula(value) {
@@ -712,6 +719,21 @@ function renderDetail() {
 
 function renderPanelState() {
   document.querySelector(".info-panel")?.classList.toggle("closed", !state.detailOpen);
+}
+
+function renderSelectionState() {
+  d3.selectAll("path.edge").attr(
+    "class",
+    (item) => `edge ${item.type === "branch" ? "branch" : "main"} ${state.selected === item.from || state.selected === item.to ? "active" : ""}`,
+  );
+  d3.selectAll("g.edge-label").attr(
+    "class",
+    (item) => `edge-label ${item.type === "branch" ? "branch" : "main"} ${state.selected === item.from || state.selected === item.to ? "active" : ""}`,
+  );
+  d3.selectAll("g.node").attr(
+    "class",
+    (item) => `node ${item.doc.category} ${state.selected === item.id ? "selected" : ""} ${item.doc.drill ? "drillable" : ""}`,
+  );
 }
 
 function renderDetailCards(details) {
@@ -849,7 +871,9 @@ document.addEventListener("click", (event) => {
   if (graphNode) {
     state.selected = graphNode.dataset.node;
     state.detailOpen = true;
-    render();
+    renderDetail();
+    renderPanelState();
+    renderSelectionState();
   }
 });
 
@@ -877,3 +901,4 @@ document.querySelector("#drillButton")?.addEventListener("click", (event) => {
 });
 
 render(true);
+document.fonts?.ready.then(() => render(true));
