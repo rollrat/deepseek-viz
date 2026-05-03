@@ -43,6 +43,10 @@
               <input id="darkModeToggle" type="checkbox" />
               <span>Dark</span>
             </label>
+            <i aria-hidden="true"></i>
+            <span data-ui-key="language">Lang</span>
+            <button class="active" data-lang-select="ko" title="Korean">KO</button>
+            <button data-lang-select="en" title="English">EN</button>
           </div>
           <svg id="graph" viewBox="0 0 1280 1280" role="img" aria-label="DeepSeek V4 top to bottom tensor graph">
             <defs>
@@ -86,11 +90,11 @@
           <div id="detailCards" class="detail-cards"></div>
           <div class="detail-shapes">
             <div>
-              <span>Input</span>
+              <span data-ui-key="input">Input</span>
               <code id="inputShape"></code>
             </div>
             <div>
-              <span>Output</span>
+              <span data-ui-key="output">Output</span>
               <code id="outputShape"></code>
             </div>
           </div>
@@ -107,6 +111,7 @@
     <script src="./vendor/elk.bundled.js?v=no-top"></script>
     <script src="./vendor/katex.min.js?v=formula"></script>
     <script src="./src-data/deepseek-v4.graph.js?v=no-top"></script>
-    <script src="./app.js?v=no-top"></script>
+    <script src="./src-data/deepseek-v4.i18n.js?v=i18n"></script>
+    <script src="./app.js?v=i18n"></script>
   </body>
 </html>

@@ -1,7 +1,23 @@
 const DATA = window.DSV4_GRAPH;
+const I18N = window.DSV4_I18N || {};
 // Development guard: group narratives are hand-written prose, so assert that
 // every detailed group member still has an inline node link in its description.
 const VERIFY_GROUP_NARRATIVE_LINKS = true;
+
+function initialStoredChoice(key, fallback) {
+  const saved = window.localStorage?.getItem(key);
+  if (saved) return saved;
+  window.localStorage?.setItem(key, fallback);
+  return fallback;
+}
+
+function initialTheme() {
+  const saved = window.localStorage?.getItem("dsv4-theme");
+  if (saved === "dark" || saved === "light") return saved;
+  const detected = window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  window.localStorage?.setItem("dsv4-theme", detected);
+  return detected;
+}
 
 const state = {
   model: "pro",
@@ -15,7 +31,8 @@ const state = {
   detailPanelPosition: null,
   showNodeFormula: true,
   embedNodeDescription: false,
-  theme: window.localStorage?.getItem("dsv4-theme") === "dark" ? "dark" : "light",
+  theme: initialTheme(),
+  lang: initialStoredChoice("dsv4-lang", "en") === "ko" ? "ko" : "en",
 };
 
 const elk = new ELK();
@@ -42,6 +59,47 @@ function sceneView() {
   // Keep simple/detailed graph topology isolated: nodes, edges, and groups
   // are selected as one view bundle instead of filtering detailed topology.
   return current.views?.[state.graphDetail] || current.views?.detailed || current;
+}
+
+function t(key) {
+  return I18N.ui?.[state.lang]?.[key] || I18N.ui?.ko?.[key] || key;
+}
+
+function isEnglish() {
+  return state.lang === "en";
+}
+
+function nodeTitle(doc) {
+  return doc?.title || "";
+}
+
+function nodeSummary(doc) {
+  if (!doc) return "";
+  if (!isEnglish()) return resolve(doc.details?.why || doc.summary || "");
+  return englishNodeDescription(doc);
+}
+
+function englishNodeDescription(doc) {
+  const input = resolve(doc.input || "");
+  const output = resolve(doc.output || "");
+  const category = doc.category || "node";
+  return `${doc.title} is a ${category} node that maps ${input || "its input"} to ${output || "its output"} in the DeepSeek V4 graph. It keeps the tensor transformation explicit while the surrounding group explains why this step exists in the model.`;
+}
+
+function nodeDetails(doc) {
+  if (!isEnglish()) return doc.details;
+  return {
+    why: englishNodeDescription(doc),
+    runtime: englishNodeRuntime(doc),
+    formula: doc.details?.formula,
+  };
+}
+
+function englishNodeRuntime(doc) {
+  const params = Object.entries(doc.params || {});
+  if (!params.length) return "Runtime behavior follows the displayed input and output tensor shapes for this node.";
+  const renderedParams = params.map(([key, value]) => `${key}=${resolve(value)}`).join(", ");
+  return `Key runtime parameters are ${renderedParams}.`;
 }
 
 function ratioValue() {
@@ -106,6 +164,7 @@ function render(fitAfterLayout = false) {
   shouldFitAfterLayout ||= fitAfterLayout;
   ensureSelection();
   applyTheme();
+  applyLanguage();
   renderModePicker();
   renderGraph();
   renderDetail();
@@ -122,15 +181,37 @@ function renderModePicker() {
   document.querySelectorAll("[data-detail-select]").forEach((button) => {
     button.classList.toggle("active", button.dataset.detailSelect === state.graphDetail);
   });
+  document.querySelectorAll("[data-lang-select]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.langSelect === state.lang);
+  });
   const descToggle = document.querySelector("#embedDescToggle");
   if (descToggle) descToggle.checked = state.embedNodeDescription;
+  const formulaToggle = document.querySelector("#formulaToggle");
+  if (formulaToggle) formulaToggle.checked = state.showNodeFormula;
   const darkToggle = document.querySelector("#darkModeToggle");
   if (darkToggle) darkToggle.checked = state.theme === "dark";
+  document.querySelectorAll("[data-ui-key]").forEach((item) => {
+    item.textContent = t(item.dataset.uiKey);
+  });
+  const overviewButton = document.querySelector('[data-scene-select="overview"]');
+  if (overviewButton) overviewButton.textContent = t("overview");
+  const formulaLabel = document.querySelector("#formulaToggle + span");
+  if (formulaLabel) formulaLabel.textContent = t("nodeFormulas");
+  const descLabel = document.querySelector("#embedDescToggle + span");
+  if (descLabel) descLabel.textContent = t("embedDesc");
+  const darkLabel = document.querySelector("#darkModeToggle + span");
+  if (darkLabel) darkLabel.textContent = t("dark");
+  const drill = document.querySelector("#drillButton");
+  if (drill) drill.textContent = t("openSubgraph");
 }
 
 function applyTheme() {
   document.body.classList.toggle("dark", state.theme === "dark");
   document.body.classList.toggle("light", state.theme !== "dark");
+}
+
+function applyLanguage() {
+  document.documentElement.lang = state.lang;
 }
 
 function renderStats() {
@@ -390,7 +471,7 @@ function nodeWidth(doc) {
   const shapeLen = Math.max(String(resolve(doc.input)).length, String(resolve(doc.output)).length);
   const detailBoost = doc.details ? 12 : 0;
   const formulaBoost = state.showNodeFormula ? 54 : 0;
-  const descLen = state.embedNodeDescription ? String(resolve(doc.details?.why || doc.summary || "")).length : 0;
+  const descLen = state.embedNodeDescription ? String(nodeSummary(doc)).length : 0;
   const descBoost = state.embedNodeDescription ? Math.min(190, 72 + descLen * 0.18) : 0;
   const raw = 168 + titleLen * 3.2 + Math.min(shapeLen, 52) * 1.8 + detailBoost + formulaBoost + descBoost;
   const min = state.embedNodeDescription ? 430 : state.showNodeFormula ? 286 : state.scene === "overview" ? 198 : 228;
@@ -727,7 +808,7 @@ function nodeHtml(item) {
   return `
     <div class="node-title-row">
       <span>${escapeHtml(item.doc.category)}</span>
-      <strong>${escapeHtml(item.doc.title)}</strong>
+      <strong>${escapeHtml(nodeTitle(item.doc))}</strong>
     </div>
     ${formula}
     ${description}
@@ -736,7 +817,7 @@ function nodeHtml(item) {
 }
 
 function nodeDescriptionHtml(doc) {
-  const source = resolve(doc.details?.why || doc.summary || "");
+  const source = nodeSummary(doc);
   if (!source) return "";
   const text = String(source).replace(/\s+/g, " ").trim();
   return `<p class="node-description">${escapeHtml(text)}</p>`;
@@ -792,11 +873,11 @@ function renderDetail() {
   if (!doc) return;
   document.querySelector(".detail-shapes").hidden = false;
   document.querySelector("#detailCategory").textContent = doc.category;
-  document.querySelector("#detailTitle").textContent = doc.title;
-  document.querySelector("#detailCards").innerHTML = renderDetailCards(doc.details);
+  document.querySelector("#detailTitle").textContent = nodeTitle(doc);
+  document.querySelector("#detailCards").innerHTML = renderDetailCards(nodeDetails(doc));
   document.querySelector("#inputShape").textContent = resolve(doc.input);
   document.querySelector("#outputShape").textContent = resolve(doc.output);
-  document.querySelector("#paramList").innerHTML = Object.entries(doc.params)
+  document.querySelector("#paramList").innerHTML = Object.entries(doc.params || {})
     .map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(resolve(value))}</dd></div>`)
     .join("");
   document.querySelector("#noteList").innerHTML = "";
@@ -814,12 +895,12 @@ function renderGroupDetail(group) {
   if (!group) return;
   const docs = group.nodeIds.map((id) => DATA.nodes[id]).filter(Boolean);
   document.querySelector(".detail-shapes").hidden = true;
-  document.querySelector("#detailCategory").textContent = `${group.category} group`;
+  document.querySelector("#detailCategory").textContent = `${group.category} ${t("group")}`;
   document.querySelector("#detailTitle").textContent = group.label;
   document.querySelector("#detailCards").innerHTML = renderGroupCards(group, docs);
   document.querySelector("#inputShape").textContent = docs.length ? resolve(docs[0].input) : "";
   document.querySelector("#outputShape").textContent = docs.length ? resolve(docs[docs.length - 1].output) : "";
-  document.querySelector("#paramList").innerHTML = `<div><dt>nodes</dt><dd>${docs.length}</dd></div>`;
+  document.querySelector("#paramList").innerHTML = `<div><dt>${escapeHtml(t("nodes"))}</dt><dd>${docs.length}</dd></div>`;
   document.querySelector("#noteList").innerHTML = "";
   document.querySelector("#noteList").hidden = true;
   document.querySelector("#sourceList").innerHTML = collectSources(docs)
@@ -835,12 +916,15 @@ function renderGroupCards(group, docs) {
   const prose = [...groupPurpose(group), ...groupNarrative(group, docs)];
   return `
     <section class="group-detail-card">
-      <h3>설명</h3>
+      <h3>${escapeHtml(t("description"))}</h3>
       ${prose.map((paragraph) => `<p>${paragraph}</p>`).join("")}
     </section>`;
 }
 
 function groupPurpose(group) {
+  if (isEnglish()) {
+    return [I18N.groupPurpose?.en?.[group.label] || `${escapeHtml(group.label)} collects related graph nodes that work together as one model subsystem.`];
+  }
   const purpose = {
     "Model entry (once)": "Decoder layer 반복에 들어가기 전, token id를 dense hidden state로 바꾸고 DeepSeek V4의 기본 운반 형식인 4-lane residual stream을 여는 진입 구간입니다. 여기서 mHC(manifold / hyper-connection 계열의 4-lane residual 구조)가 처음 등장하며, 이후 모든 attention과 MoE sublayer는 단일 `[B,S,D]` stream이 아니라 `[B,S,4,D]` lane state를 읽고 다시 쓰는 방식으로 동작합니다. 이 구간의 의도는 입력 token 정보를 일반 embedding으로 끝내지 않고, layer 사이를 더 안정적으로 이동할 수 있는 다중 residual lane 상태로 올려놓는 것입니다.",
     "mHC controller + read path": "Attention sublayer 앞에서 mHC(manifold / hyper-connection 계열 residual lane controller)가 4개 lane 전체를 보고 read/write/mix coefficient를 만드는 제어 구간입니다. attention 자체를 lane마다 4번 실행하면 compute가 커지므로, controller가 먼저 어떤 lane 조합을 읽을지 정하고 data path는 그 결과를 단일 `[B,S,D]` hidden stream으로 접습니다. 동시에 post coefficient와 doubly-stochastic comb matrix도 준비해 두기 때문에, 이 구간은 attention 입력 생성뿐 아니라 attention 이후 residual lane 안정화까지 미리 설계하는 역할을 합니다.",
@@ -884,6 +968,7 @@ function groupPurpose(group) {
 
 function groupNarrative(group, docs) {
   const n = (id, label) => nodeInline(id, DATA.nodes[id], label);
+  if (isEnglish()) return englishGroupNarrative(group, docs, n);
   const narratives = {
     "Model entry (once)": [
       `${n("input-ids", "토큰 id")}는 모델에 한 번 들어오는 이산 입력이고, ${n("embedding", "embedding lookup")}이 이를 hidden vector로 바꾼 뒤 ${n("hc-expand", "4-lane residual state")}로 확장합니다. 이 상태가 ${n("stack-entry", "대표 decoder layer")}의 시작점이 되므로, 반복 layer 내부가 아니라 전체 stack 진입부를 보여줍니다.`,
@@ -1012,6 +1097,24 @@ function fallbackGroupNarrative(group, docs, n) {
   return [`${escapeHtml(group.label)}는 ${refs}를 하나의 처리 구간으로 묶어 보여줍니다. 각 링크를 누르면 해당 노드의 상세 설명과 graph 위치로 이동합니다.`];
 }
 
+function englishGroupNarrative(group, docs, n) {
+  if (!docs.length) return [`${escapeHtml(group.label)} has no visible nodes in the current graph view.`];
+  const chunks = [];
+  for (let index = 0; index < docs.length; index += 5) {
+    const part = docs
+      .slice(index, index + 5)
+      .map((doc) => {
+        const input = escapeHtml(resolve(doc.input || ""));
+        const output = escapeHtml(resolve(doc.output || ""));
+        return `${n(doc.id)} (${input} -> ${output})`;
+      })
+      .join(", ");
+    const prefix = index === 0 ? "The linked flow starts with " : "It then continues through ";
+    chunks.push(`${prefix}${part}.`);
+  }
+  return chunks;
+}
+
 function nodeInline(id, doc = DATA.nodes[id], label = null) {
   const text = label || doc?.title || id;
   const title = doc?.title || id;
@@ -1021,27 +1124,33 @@ function nodeInline(id, doc = DATA.nodes[id], label = null) {
 function verifyGroupNarrativeLinks() {
   if (!VERIFY_GROUP_NARRATIVE_LINKS) return;
   const failures = [];
-  Object.entries(DATA.scenes).forEach(([sceneId, item]) => {
-    const detailedView = item.views?.detailed || item;
-    (detailedView.groups || []).forEach((group) => {
-      // The authoritative membership list is group.nodeIds; prose links must cover it exactly.
-      const docs = group.nodeIds.map((id) => DATA.nodes[id]).filter(Boolean);
-      const html = renderGroupCards(group, docs);
-      const linkedIds = new Set([...html.matchAll(/data-group-node="([^"]+)"/g)].map((match) => match[1]));
-      const missingDocs = group.nodeIds.filter((id) => !DATA.nodes[id]);
-      const missingLinks = group.nodeIds.filter((id) => DATA.nodes[id] && !linkedIds.has(id));
-      const strayLinks = [...linkedIds].filter((id) => !group.nodeIds.includes(id));
-      if (missingDocs.length || missingLinks.length || strayLinks.length) {
-        failures.push({
-          scene: sceneId,
-          group: group.label,
-          missingDocs,
-          missingLinks,
-          strayLinks,
-        });
-      }
+  const originalLang = state.lang;
+  ["ko", "en"].forEach((lang) => {
+    state.lang = lang;
+    Object.entries(DATA.scenes).forEach(([sceneId, item]) => {
+      const detailedView = item.views?.detailed || item;
+      (detailedView.groups || []).forEach((group) => {
+        // group.nodeIds is the source of truth; every prose paragraph must link
+        // every member exactly once so group explanations stay navigable.
+        const docs = group.nodeIds.map((id) => DATA.nodes[id]).filter(Boolean);
+        const html = renderGroupCards(group, docs);
+        const linkedIds = new Set([...html.matchAll(/data-group-node="([^"]+)"/g)].map((match) => match[1]));
+        const missingDocs = group.nodeIds.filter((id) => !DATA.nodes[id]);
+        const missingLinks = group.nodeIds.filter((id) => DATA.nodes[id] && !linkedIds.has(id));
+        const strayLinks = [...linkedIds].filter((id) => !group.nodeIds.includes(id));
+        if (missingDocs.length || missingLinks.length || strayLinks.length) {
+          failures.push({
+            scene: `${lang}:${sceneId}`,
+            group: group.label,
+            missingDocs,
+            missingLinks,
+            strayLinks,
+          });
+        }
+      });
     });
   });
+  state.lang = originalLang;
 
   if (!failures.length) return;
   const report = failures
@@ -1179,25 +1288,18 @@ function groupStackRank(group) {
 
 function renderDetailCards(details) {
   if (!details) return "";
-  const labels = {
-    why: "설명",
-    runtime: "런타임 동작",
-    ui: "시각화 포인트",
-    open: "남은 질문",
-    formula: "계산식",
-  };
   return Object.entries(details)
     .filter(([, value]) => value)
     .map(([label, value]) => {
       if (label === "formula") {
-        return `<section class="formula-card"><h3>${escapeHtml(labels[label])}</h3>${renderFormulaList(value)}</section>`;
+        return `<section class="formula-card"><h3>${escapeHtml(t(label))}</h3>${renderFormulaList(value)}</section>`;
       }
       const items = Array.isArray(value) ? value : [value];
       const body =
         items.length === 1
           ? `<p>${escapeHtml(resolve(items[0]))}</p>`
           : `<ul>${items.map((item) => `<li>${escapeHtml(resolve(item))}</li>`).join("")}</ul>`;
-      return `<section><h3>${escapeHtml(labels[label] || label)}</h3>${body}</section>`;
+      return `<section><h3>${escapeHtml(t(label) || label)}</h3>${body}</section>`;
     })
     .join("");
 }
@@ -1208,7 +1310,7 @@ function renderFormulaList(value) {
     .map((item) => {
       const formula = typeof item === "string" ? { latex: item } : item;
       const title = formula.title ? `<h4>${escapeHtml(resolve(formula.title))}</h4>` : "";
-      const note = formula.note ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
+      const note = formula.note && !isEnglish() ? `<p>${escapeHtml(resolve(formula.note))}</p>` : "";
       return `<div class="formula-block">${title}<div class="formula">${renderLatex(resolve(formula.latex || ""))}</div>${note}</div>`;
     })
     .join("");
@@ -1310,6 +1412,14 @@ document.addEventListener("click", (event) => {
     document.querySelectorAll("[data-model]").forEach((button) => {
       button.classList.toggle("active", button.dataset.model === state.model);
     });
+    render(true);
+    return;
+  }
+
+  const langButton = event.target.closest("[data-lang-select]");
+  if (langButton) {
+    state.lang = langButton.dataset.langSelect === "en" ? "en" : "ko";
+    window.localStorage?.setItem("dsv4-lang", state.lang);
     render(true);
     return;
   }
