@@ -552,6 +552,10 @@ h1 {
   pointer-events: none;
 }
 
+.graph-group.clickable rect {
+  cursor: pointer;
+}
+
 .graph-group.hc rect {
   stroke: rgba(101, 86, 166, 0.28);
   fill: rgba(229, 222, 244, 0.11);
@@ -902,6 +906,32 @@ h1 {
 
 .detail-cards p + p {
   margin-top: 7px;
+}
+
+.group-detail-card code {
+  font-size: 12px;
+}
+
+.node-ref {
+  display: inline;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #0f5f59;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+  text-decoration: underline;
+  text-decoration-color: rgba(15, 95, 89, 0.28);
+  text-underline-offset: 2px;
+}
+
+.node-ref:hover {
+  color: var(--ink);
+  background: rgba(224, 246, 244, 0.6);
+  text-decoration-color: rgba(23, 34, 37, 0.36);
 }
 
 .formula-card {
